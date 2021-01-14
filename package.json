@@ -6,7 +6,8 @@
   "types": "src/packherd.js",
   "scripts": {
     "build": "tsc",
-    "test": "yarn build && (cd tests/fixtures/minimal && yarn) && tape ./dist/tests/*.js",
+    "test-only": "(cd tests/fixtures/minimal && yarn) && tape ./dist/tests/*.js",
+    "test": "yarn build && yarn test-only",
     "lint": "prettier -c ./src/",
     "lint:fix": "prettier --format ./src",
     "watch": "tsc --watch"
