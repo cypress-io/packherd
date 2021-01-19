@@ -12,8 +12,8 @@ test('minimal example: resolves paths relative to entry and creates entry conten
   t.equal(
     entry,
     `// vim: set ft=text:
-exports['node_modules/isobject/index.cjs.js'] = require('node_modules/isobject/index.cjs.js')
-exports['node_modules/tmpfile/index.js'] = require('node_modules/tmpfile/index.js')`
+exports['./node_modules/isobject/index.cjs.js'] = require('./node_modules/isobject/index.cjs.js')
+exports['./node_modules/tmpfile/index.js'] = require('./node_modules/tmpfile/index.js')`
   )
   t.end()
 })

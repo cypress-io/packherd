@@ -1,14 +1,13 @@
 import path from 'path'
 
-import { tmpdir } from 'os'
-import { promises as fs } from 'fs'
-import { ensureDirSync } from './utils'
+import { strict as assert } from 'assert'
 import { createBundle } from './create-bundle'
 import { Metadata } from 'esbuild'
+import { tmpFilePaths } from './utils'
 
 const packherd = require('../../package.json').name
 
-type PathsMapper = (s: string) => string
+export type PathsMapper = (s: string) => string
 const identityMapper: PathsMapper = (s: string) => s
 
 const cwd = process.cwd()
@@ -32,21 +31,21 @@ export class EntryGenerator {
     const paths = fullPaths.map((x) => path.relative(this.entryDirectory, x))
 
     const entry = ['// vim: set ft=text:']
-      .concat(paths.map((x) => `exports['${x}'] = require('${x}')`))
+      .concat(paths.map((x) => `exports['./${x}'] = require('./${x}')`))
       .join('\n')
     return { paths, entry }
   }
 
   private async _getMetadata(): Promise<Metadata> {
-    const bundleTmpDir = path.join(tmpdir(), 'v8-snapshot')
-    ensureDirSync(bundleTmpDir)
-
-    const outfile = path.join(bundleTmpDir, 'bundle.js')
-    const metafile = path.join(bundleTmpDir, 'meta.json')
-
-    createBundle({ outfile, metafile, entryFilePath: this.entryFile })
-    const metaContent = await fs.readFile(metafile, 'utf8')
-    return JSON.parse(metaContent)
+    const { outfile, metafile } = tmpFilePaths()
+    const { outputFiles } = await createBundle({
+      outfile,
+      metafile,
+      entryFilePath: this.entryFile,
+      outbase: this.entryDirectory,
+    })
+    assert(outputFiles.length >= 2, 'expecting at least two outfiles')
+    return JSON.parse(Buffer.from(outputFiles[1].contents).toString('utf8'))
   }
 
   private _resolveRelativePaths(meta: Metadata) {

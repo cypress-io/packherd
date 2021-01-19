@@ -1,7 +1,6 @@
-import { BuildOptions, buildSync } from 'esbuild'
+import { build, BuildOptions, BuildResult, OutputFile } from 'esbuild'
 
 export type CreateBundleOpts = BuildOptions & {
-  outfile: string
   metafile: string
   entryFilePath: string
 }
@@ -11,13 +10,16 @@ const DEFAULT_BUNDLE_OPTS: Partial<CreateBundleOpts> = {
   target: ['node14.5'],
 }
 
-export function createBundle(args: CreateBundleOpts) {
-  const opts: CreateBundleOpts = Object.assign({}, DEFAULT_BUNDLE_OPTS, args, {
+export function createBundle(
+  args: CreateBundleOpts
+): Promise<BuildResult & { outputFiles: OutputFile[] }> {
+  const opts = Object.assign({}, DEFAULT_BUNDLE_OPTS, args, {
     entryPoints: [args.entryFilePath],
     bundle: true,
-  })
+    write: false,
+  }) as BuildOptions & { write: false }
   // TODO(thlorenz): this is horrible, but esbuild throws if it encounters an unknown opt
   // @ts-ignore
   delete opts.entryFilePath
-  buildSync(opts)
+  return build(opts)
 }
