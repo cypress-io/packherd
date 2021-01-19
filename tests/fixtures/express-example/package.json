@@ -1,0 +1,14 @@
+{
+  "name": "express-example",
+  "version": "0.0.0",
+  "description": "packherd express example fixture",
+  "scripts": {
+    "start-node": "DEBUG='packherd:*' node -r ./hook-require.js app.js",
+    "bundle": "node pack"
+  },
+  "main": "app.js",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.17.1"
+  }
+}

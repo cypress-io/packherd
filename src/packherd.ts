@@ -36,3 +36,5 @@ export async function packherd(opts: PackherdOpts) {
     meta: JSON.parse(Buffer.from(outputFiles[1].contents).toString('utf8')),
   }
 }
+
+export { packherdRequire, PackherdRequireOpts } from './require'
