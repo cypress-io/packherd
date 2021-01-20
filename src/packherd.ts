@@ -1,23 +1,36 @@
 import path from 'path'
 import { strict as assert } from 'assert'
-import { createBundle } from './create-bundle'
+import {
+  CreateBundle,
+  createBundle as defaultCreateBundle,
+} from './create-bundle'
 import { EntryGenerator, PathsMapper } from './generate-entry'
 import { tmpFilePaths } from './utils'
+
+export { packherdRequire, PackherdRequireOpts } from './require'
+export {
+  CreateBundle,
+  CreateBundleOpts,
+  CreateBundleResult,
+} from './create-bundle'
 
 export type PackherdOpts = {
   entryFile: string
   nodeModulesOnly?: boolean
   pathsMapper?: PathsMapper
+  createBundle?: CreateBundle
 }
 
 export async function packherd(opts: PackherdOpts) {
+  const createBundle = opts.createBundle || defaultCreateBundle
   const entryGenerator = new EntryGenerator(
+    createBundle,
     opts.entryFile,
     opts.nodeModulesOnly,
     opts.pathsMapper
   )
-  const { entry } = await entryGenerator.createEntryScript()
 
+  const { entry } = await entryGenerator.createEntryScript()
   const { outfile, metafile } = tmpFilePaths()
 
   const { outputFiles } = await createBundle({
@@ -32,9 +45,7 @@ export async function packherd(opts: PackherdOpts) {
   })
   assert(outputFiles.length >= 2, 'expecting at least two outfiles')
   return {
-    bundle: Buffer.from(outputFiles[0].contents),
-    meta: JSON.parse(Buffer.from(outputFiles[1].contents).toString('utf8')),
+    bundle: outputFiles[0].text,
+    meta: JSON.parse(outputFiles[1].text),
   }
 }
-
-export { packherdRequire, PackherdRequireOpts } from './require'

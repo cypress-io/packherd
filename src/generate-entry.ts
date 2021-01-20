@@ -1,23 +1,24 @@
 import path from 'path'
 
 import { strict as assert } from 'assert'
-import { createBundle } from './create-bundle'
+import { CreateBundle } from './create-bundle'
 import { Metadata } from 'esbuild'
 import { tmpFilePaths } from './utils'
 
 const packherd = require('../../package.json').name
 
 export type PathsMapper = (s: string) => string
-const identityMapper: PathsMapper = (s: string) => s
+export const identityMapper: PathsMapper = (s: string) => s
 
 const cwd = process.cwd()
 
 export class EntryGenerator {
   private readonly entryDirectory: string
   constructor(
-    readonly entryFile: string,
-    readonly nodeModulesOnly: boolean = true,
-    readonly pathsMapper: PathsMapper = identityMapper
+    private readonly createBundle: CreateBundle,
+    private readonly entryFile: string,
+    private readonly nodeModulesOnly: boolean = true,
+    private readonly pathsMapper: PathsMapper = identityMapper
   ) {
     this.entryDirectory = path.dirname(entryFile)
   }
@@ -38,14 +39,14 @@ export class EntryGenerator {
 
   private async _getMetadata(): Promise<Metadata> {
     const { outfile, metafile } = tmpFilePaths()
-    const { outputFiles } = await createBundle({
+    const { outputFiles } = await this.createBundle({
       outfile,
       metafile,
       entryFilePath: this.entryFile,
       outbase: this.entryDirectory,
     })
     assert(outputFiles.length >= 2, 'expecting at least two outfiles')
-    return JSON.parse(Buffer.from(outputFiles[1].contents).toString('utf8'))
+    return JSON.parse(outputFiles[1].text)
   }
 
   private _resolveRelativePaths(meta: Metadata) {

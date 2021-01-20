@@ -5,6 +5,16 @@ export type CreateBundleOpts = BuildOptions & {
   entryFilePath: string
 }
 
+export type CreateBundleOutputFile = Pick<OutputFile, 'text'>
+export type CreateBundleResult = {
+  warnings: BuildResult['warnings']
+  outputFiles: CreateBundleOutputFile[]
+}
+
+export type CreateBundle = (
+  args: CreateBundleOpts
+) => Promise<CreateBundleResult>
+
 const DEFAULT_BUNDLE_OPTS: Partial<CreateBundleOpts> = {
   platform: 'node',
   target: ['node14.5'],
@@ -12,7 +22,7 @@ const DEFAULT_BUNDLE_OPTS: Partial<CreateBundleOpts> = {
 
 export function createBundle(
   args: CreateBundleOpts
-): Promise<BuildResult & { outputFiles: OutputFile[] }> {
+): Promise<CreateBundleResult> {
   const opts = Object.assign({}, DEFAULT_BUNDLE_OPTS, args, {
     entryPoints: [args.entryFilePath],
     bundle: true,
