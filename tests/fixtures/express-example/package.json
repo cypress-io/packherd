@@ -4,7 +4,8 @@
   "description": "packherd express example fixture",
   "scripts": {
     "start-node": "DEBUG='packherd:*' node -r ./hook-require.js app.js",
-    "bundle": "node pack"
+    "bundle": "node pack",
+    "bundle-custom": "BUNDLER=$SNAPSHOT node pack-custom"
   },
   "main": "app.js",
   "license": "MIT",

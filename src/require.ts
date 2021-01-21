@@ -39,7 +39,6 @@ export function packherdRequire(
     isMain: boolean
   ) {
     logTrace('_load "%s"', moduleUri)
-    debugger
     if (Module.builtinModules.includes(moduleUri)) {
       return origLoad(moduleUri, parent, isMain)
     }

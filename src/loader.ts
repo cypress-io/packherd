@@ -79,7 +79,7 @@ export class PackherdModuleLoader {
         loaded: true,
         parent,
         path: fullPath,
-        paths: parent.paths,
+        paths: parent?.paths || [],
         require: this.Module.createRequire(fullPath),
       }
       if (this.exportsObjects) {
