@@ -1,19 +1,5 @@
-import { build, BuildOptions, BuildResult, OutputFile } from 'esbuild'
-
-export type CreateBundleOpts = BuildOptions & {
-  metafile: string
-  entryFilePath: string
-}
-
-export type CreateBundleOutputFile = Pick<OutputFile, 'text'>
-export type CreateBundleResult = {
-  warnings: BuildResult['warnings']
-  outputFiles: CreateBundleOutputFile[]
-}
-
-export type CreateBundle = (
-  args: CreateBundleOpts
-) => Promise<CreateBundleResult>
+import { BuildOptions, build } from 'esbuild'
+import { CreateBundleOpts, CreateBundleResult } from './types'
 
 const DEFAULT_BUNDLE_OPTS: Partial<CreateBundleOpts> = {
   platform: 'node',

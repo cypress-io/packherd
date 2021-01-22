@@ -1,9 +1,9 @@
 import path from 'path'
 
 import { strict as assert } from 'assert'
-import { CreateBundle } from './create-bundle'
 import { Metadata } from 'esbuild'
 import { tmpFilePaths } from './utils'
+import { CreateBundle } from './types'
 
 const packherd = require('../../package.json').name
 

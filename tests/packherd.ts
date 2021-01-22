@@ -2,13 +2,13 @@ import {
   CreateBundle,
   CreateBundleOpts,
   CreateBundleResult,
+  CreateBundleOutputFile,
   packherd,
 } from '../src/packherd'
 import test from 'tape'
 
 import spok from 'spok'
 import { Metadata } from 'esbuild'
-import { CreateBundleOutputFile } from 'src/create-bundle'
 
 test('minimal example: resolves paths relative to entry and creates entry content', async (t) => {
   const entryFile = require.resolve('../../tests/fixtures/minimal/entry.js')

@@ -1,3 +1,5 @@
+import { BuildOptions, BuildResult, OutputFile } from 'esbuild'
+
 type NodeRequireFunction = (id: string) => any
 
 export type ModuleDefinition = (
@@ -7,13 +9,6 @@ export type ModuleDefinition = (
   __dirname: string,
   require: NodeRequireFunction
 ) => NodeModule
-
-export type SnapshotResult = {
-  customRequire: {
-    cache: Record<string, NodeModule>
-    definitions: Record<string, ModuleDefinition>
-  }
-}
 
 export type ModuleResolveResult = {
   resolved: 'module' | 'path'
@@ -39,3 +34,18 @@ export type ModuleBuildin = typeof import('module') & {
   ): NodeModule
   _cache: Record<string, NodeModule>
 }
+
+export type CreateBundleOpts = BuildOptions & {
+  metafile: string
+  entryFilePath: string
+}
+
+export type CreateBundleOutputFile = Pick<OutputFile, 'text'>
+export type CreateBundleResult = {
+  warnings: BuildResult['warnings']
+  outputFiles: CreateBundleOutputFile[]
+}
+
+export type CreateBundle = (
+  args: CreateBundleOpts
+) => Promise<CreateBundleResult>

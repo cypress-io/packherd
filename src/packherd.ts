@@ -1,18 +1,12 @@
 import path from 'path'
 import { strict as assert } from 'assert'
-import {
-  CreateBundle,
-  createBundle as defaultCreateBundle,
-} from './create-bundle'
+import { createBundle as defaultCreateBundle } from './create-bundle'
 import { EntryGenerator, PathsMapper } from './generate-entry'
 import { tmpFilePaths } from './utils'
+import { CreateBundle } from './types'
 
 export { packherdRequire, PackherdRequireOpts } from './require'
-export {
-  CreateBundle,
-  CreateBundleOpts,
-  CreateBundleResult,
-} from './create-bundle'
+export * from './types'
 
 export type PackherdOpts = {
   entryFile: string

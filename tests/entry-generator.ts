@@ -1,12 +1,13 @@
 import { Metadata } from 'esbuild'
 import test from 'tape'
+import { createBundle } from '../src/create-bundle'
 import {
-  createBundle,
   CreateBundle,
   CreateBundleOpts,
   CreateBundleOutputFile,
   CreateBundleResult,
-} from '../src/create-bundle'
+} from '../src/packherd'
+
 import { EntryGenerator } from '../src/generate-entry'
 
 test('minimal example: resolves paths relative to entry and creates entry content', async (t) => {

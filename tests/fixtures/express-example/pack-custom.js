@@ -44,8 +44,6 @@ function outfileText(outfile) {
 }
 
 function createBundle(opts) {
-  // const outfile = path.join(bundleTmpDir, opts.bundleFile || 'bundle.js')
-  // const metafile = path.join(bundleTmpDir, opts.metaFile || 'meta.json')
   const cmd = `${bundlerPath} --basedir=${basedir} ${opts.entryFilePath}`
   const _1GB = 1024 * 1024 * 1024
   console.log(cmd)
