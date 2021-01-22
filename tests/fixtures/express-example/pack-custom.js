@@ -15,6 +15,24 @@ if (process.env.BUNDLER == null) {
   process.exit(1)
 }
 
+const prelude = `
+function get_document() {
+  return document
+}
+function get_global() {
+  return global
+}
+function get_window() {
+  return window
+}
+function get_console() {
+  return console
+}
+function get_process() {
+  return process
+}
+`
+
 const basedir = __dirname
 const bundlerPath = process.env.BUNDLER
 
@@ -32,11 +50,10 @@ function createBundle(opts) {
   const _1GB = 1024 * 1024 * 1024
   console.log(cmd)
   const stdout = execSync(cmd, { maxBuffer: _1GB, cwd: basedir })
-  // fs.writeFileSync('/tmp/result.json', stdout, 'utf8')
 
   const { warnings, outfiles } = JSON.parse(stdout.toString())
   assert(outfiles.length >= 2, 'need at least two outfiles, bundle and meta')
-  const bundle = { text: outfileText(outfiles[0]) }
+  const bundle = { text: prelude + outfileText(outfiles[0]) }
   const meta = { text: outfileText(outfiles[1]) }
   return Promise.resolve({ warnings, outputFiles: [bundle, meta] })
 }
