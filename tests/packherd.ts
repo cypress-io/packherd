@@ -10,7 +10,7 @@ import test from 'tape'
 import spok from 'spok'
 import { Metadata } from 'esbuild'
 
-test('minimal example: resolves paths relative to entry and creates entry content', async (t) => {
+test('packherd minimal: resolves paths relative to entry and creates entry content', async (t) => {
   const entryFile = require.resolve('../../tests/fixtures/minimal/entry.js')
   const { meta, bundle } = await packherd({ entryFile })
   spok(t, meta, {
@@ -40,7 +40,7 @@ test('minimal example: resolves paths relative to entry and creates entry conten
   t.end()
 })
 
-test('minimal example: custom create bundle', async (t) => {
+test('packherd minimal: custom create bundle', async (t) => {
   const bundleStub: CreateBundleOutputFile = {
     text: '// Unused bundle content',
   }

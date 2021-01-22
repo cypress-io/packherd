@@ -10,7 +10,7 @@ import {
 
 import { EntryGenerator } from '../src/generate-entry'
 
-test('minimal example: resolves paths relative to entry and creates entry content', async (t) => {
+test('generate minimal: resolves paths relative to entry and creates entry content', async (t) => {
   const entryFile = require.resolve('../../tests/fixtures/minimal/entry.js')
   const generator = new EntryGenerator(createBundle, entryFile)
   const { paths, entry } = await generator.createEntryScript()
@@ -27,7 +27,7 @@ exports['./node_modules/tmpfile/index.js'] = require('./node_modules/tmpfile/ind
   t.end()
 })
 
-test('minimal example: custom create bundle', async (t) => {
+test('generate minimal: custom create bundle', async (t) => {
   const bundle: CreateBundleOutputFile = {
     text: '// Unused bundle content',
   }

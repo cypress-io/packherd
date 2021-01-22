@@ -2,7 +2,6 @@ import path from 'path'
 
 import { strict as assert } from 'assert'
 import { Metadata } from 'esbuild'
-import { tmpFilePaths } from './utils'
 import { CreateBundle } from './types'
 
 const packherd = require('../../package.json').name
@@ -38,10 +37,9 @@ export class EntryGenerator {
   }
 
   private async _getMetadata(): Promise<Metadata> {
-    const { outfile, metafile } = tmpFilePaths()
     const { outputFiles } = await this.createBundle({
-      outfile,
-      metafile,
+      metafile: '<stdout:meta>',
+      outfile: '<stdout:out>',
       entryFilePath: this.entryFile,
       outbase: this.entryDirectory,
     })

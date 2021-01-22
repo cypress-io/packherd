@@ -36,7 +36,6 @@ export type ModuleBuildin = typeof import('module') & {
 }
 
 export type CreateBundleOpts = BuildOptions & {
-  metafile: string
   entryFilePath: string
 }
 
