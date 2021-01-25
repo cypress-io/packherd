@@ -1,3 +1,4 @@
+import { strict as assert } from 'assert'
 import debug from 'debug'
 import path from 'path'
 import { ModuleLoaderOpts, PackherdModuleLoader } from './loader'
@@ -9,22 +10,30 @@ const logTrace = debug('packherd:trace')
 export * from './loader'
 export type PackherdRequireOpts = ModuleLoaderOpts
 
-export function packherdRequire(
-  packherdExports: NodeModule['exports'],
-  entryFile: string,
-  opts: PackherdRequireOpts
-) {
+export function packherdRequire(entryFile: string, opts: PackherdRequireOpts) {
   const projectBaseDir = path.dirname(entryFile)
+  assert(
+    opts.moduleExports != null || opts.moduleDefinitions != null,
+    'need to provide moduleDefinitions, moduleDefinitions or both'
+  )
 
-  const packherdKeys = Object.keys(packherdExports)
-  logInfo('packherd defining %d modules!', packherdKeys.length)
+  const exportKeysLen =
+    opts.moduleExports != null ? Object.keys(opts.moduleExports).length : 0
+  const definitionKeysLen =
+    opts.moduleDefinitions != null
+      ? Object.keys(opts.moduleDefinitions).length
+      : 0
+  logInfo(
+    'packherd defining %d exports and %d definitions!',
+    exportKeysLen,
+    definitionKeysLen
+  )
   logInfo({ projectBaseDir })
 
   const Module = require('module')
   const origLoad = Module._load
 
   const moduleLoader = new PackherdModuleLoader(
-    packherdExports,
     Module,
     origLoad,
     projectBaseDir,
@@ -85,7 +94,8 @@ export function packherdRequire(
         )
         break
       }
-      case 'packherd': {
+      case 'packherd:export':
+      case 'packherd:definition': {
         logTrace('Loaded "%s" via %s', moduleUri, origin)
         break
       }

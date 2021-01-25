@@ -18,7 +18,7 @@ export type ModuleResolveResult = {
 
 export type ModuleLoadResult = ModuleResolveResult & {
   exports: NodeModule
-  origin: 'packherd' | 'Module._load'
+  origin: 'packherd:export' | 'packherd:definition' | 'Module._load'
 }
 
 export type ModuleBuildin = typeof import('module') & {

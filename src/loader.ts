@@ -1,6 +1,13 @@
 import debug from 'debug'
+import { strict as assert } from 'assert'
+import Module from 'module'
 import path from 'path'
-import { ModuleBuildin, ModuleLoadResult, ModuleResolveResult } from './types'
+import {
+  ModuleBuildin,
+  ModuleDefinition,
+  ModuleLoadResult,
+  ModuleResolveResult,
+} from './types'
 
 const logInfo = debug('packherd:info')
 
@@ -11,10 +18,8 @@ export type GetModuleKey = (
 
 export type ModuleLoaderOpts = {
   diagnostics?: boolean
-  // esbuild default bundler exports objects, however the adapted version for snapshots
-  // exports functions ala Node.js wrappers instead
-  // TODO(thlorenz): allow both objects and definitions which will be queried, objects first
-  exportsObjects: boolean
+  moduleExports: Record<string, Module>
+  moduleDefinitions: Record<string, ModuleDefinition>
   getModuleKey?: GetModuleKey
 }
 
@@ -22,34 +27,102 @@ const defaultGetModuleKey = (moduleRelativePath: string, _moduleUri: string) =>
   `./${moduleRelativePath}`
 
 export class PackherdModuleLoader {
-  hits: number = 0
+  exportHits: number = 0
+  definitionHits: number = 0
   misses: number = 0
   private readonly diagnostics: boolean
-  private readonly exportsObjects: boolean
   private readonly getModuleKey: GetModuleKey
+  private readonly moduleExports: Record<string, Module>
+  private readonly moduleDefinitions: Record<string, ModuleDefinition>
 
   constructor(
-    private readonly packherdExports: NodeModule['exports'],
     private readonly Module: ModuleBuildin,
     private readonly origLoad: ModuleBuildin['_load'],
     private readonly projectBaseDir: string,
     opts: ModuleLoaderOpts
   ) {
     this.diagnostics = !!opts.diagnostics
-    this.exportsObjects = opts.exportsObjects
     this.getModuleKey = opts.getModuleKey || defaultGetModuleKey
+    assert(
+      opts.moduleExports != null || opts.moduleDefinitions != null,
+      'need to provide moduleDefinitions, moduleDefinitions or both'
+    )
+    this.moduleExports = opts.moduleExports ?? {}
+    this.moduleDefinitions = opts.moduleDefinitions ?? {}
   }
 
-  dumpInfo() {
+  tryLoad(
+    moduleUri: string,
+    parent: NodeModule,
+    isMain: boolean
+  ): ModuleLoadResult {
+    let { resolved, fullPath, relPath } = this._resolvePaths(
+      moduleUri,
+      parent,
+      isMain
+    )
+    const moduleKey = this.getModuleKey(moduleUri, relPath)
+
+    // 1. try to resolve from module exports
+    const moduleExport: Module = this.moduleExports[moduleKey]
+
+    let mod: Module | undefined
+    let origin: ModuleLoadResult['origin'] | undefined
+    if (moduleExport != null) {
+      mod = this._createModule(fullPath, parent)
+      debugger
+      mod.exports = moduleExport.exports
+      this.exportHits++
+      origin = 'packherd:export'
+    } else {
+      // 2. try to resolve from module definitions
+      const moduleDefinition = this.moduleDefinitions[moduleKey]
+      if (moduleDefinition != null) {
+        mod = this._createModule(fullPath, parent)
+        moduleDefinition(
+          mod.exports,
+          mod,
+          fullPath,
+          path.dirname(fullPath),
+          mod.require
+        )
+        this.definitionHits++
+        origin = 'packherd:definition'
+      }
+    }
+    if (mod != null) {
+      assert(origin != null, 'should have set origin when setting module')
+
+      this.Module._cache[fullPath] = mod
+      this._dumpInfo()
+
+      return {
+        resolved,
+        origin,
+        exports: mod.exports,
+        fullPath,
+        relPath,
+      }
+    }
+
+    // 3. If none of the above worked fall back to Node.js loader
+    const exports = this.origLoad(moduleUri, parent, isMain)
+    this.misses++
+    this._dumpInfo()
+    return { resolved, origin: 'Module._load', exports, fullPath, relPath }
+  }
+
+  private _dumpInfo() {
     if (this.diagnostics) {
       logInfo({
-        hits: this.hits,
+        exportHits: this.exportHits,
+        definitionHits: this.definitionHits,
         misses: this.misses,
       })
     }
   }
 
-  resolvePaths(
+  private _resolvePaths(
     moduleUri: string,
     parent: NodeModule,
     isMain: boolean
@@ -67,59 +140,17 @@ export class PackherdModuleLoader {
     return { resolved, fullPath, relPath }
   }
 
-  tryLoad(
-    moduleUri: string,
-    parent: NodeModule,
-    isMain: boolean
-  ): ModuleLoadResult {
-    let { resolved, fullPath, relPath } = this.resolvePaths(
-      moduleUri,
+  private _createModule(fullPath: string, parent: Module): NodeModule {
+    return {
+      children: [],
+      exports: {},
+      filename: fullPath,
+      id: fullPath,
+      loaded: true,
       parent,
-      isMain
-    )
-    const packherdKey = this.getModuleKey(moduleUri, relPath)
-
-    // 1. try to resolve from packherd module
-    const exporter = this.packherdExports[packherdKey]
-    if (exporter != null) {
-      const mod: NodeModule = {
-        children: [],
-        exports: {},
-        filename: fullPath,
-        id: fullPath,
-        loaded: true,
-        parent,
-        path: fullPath,
-        paths: parent?.paths || [],
-        require: this.Module.createRequire(fullPath),
-      }
-      if (this.exportsObjects) {
-        mod.exports = exporter
-      } else {
-        exporter(
-          mod.exports,
-          mod,
-          fullPath,
-          path.dirname(fullPath),
-          mod.require
-        )
-      }
-      this.hits++
-      this.Module._cache[fullPath] = mod
-      this.dumpInfo()
-      return {
-        resolved,
-        origin: 'packherd',
-        exports: mod.exports,
-        fullPath,
-        relPath,
-      }
+      path: fullPath,
+      paths: parent?.paths || [],
+      require: this.Module.createRequire(fullPath),
     }
-
-    // 2. If none of the above worked fall back to Node.js loader
-    const exports = this.origLoad(moduleUri, parent, isMain)
-    this.misses++
-    this.dumpInfo()
-    return { resolved, origin: 'Module._load', exports, fullPath, relPath }
   }
 }
