@@ -10,6 +10,7 @@ import {
 } from './types'
 
 const logInfo = debug('packherd:info')
+const logTrace = debug('packherd:trace')
 
 export type GetModuleKey = (
   moduleRelativePath: string,
@@ -69,7 +70,7 @@ export class PackherdModuleLoader {
     let mod: Module | undefined
     let origin: ModuleLoadResult['origin'] | undefined
     if (moduleExport != null) {
-      mod = this._createModule(fullPath, parent)
+      mod = this._createModule(fullPath, parent, moduleKey)
       debugger
       mod.exports = moduleExport.exports
       this.exportHits++
@@ -78,7 +79,7 @@ export class PackherdModuleLoader {
       // 2. try to resolve from module definitions
       const moduleDefinition = this.moduleDefinitions[moduleKey]
       if (moduleDefinition != null) {
-        mod = this._createModule(fullPath, parent)
+        mod = this._createModule(fullPath, parent, moduleKey)
         moduleDefinition(
           mod.exports,
           mod,
@@ -140,7 +141,14 @@ export class PackherdModuleLoader {
     return { resolved, fullPath, relPath }
   }
 
-  private _createModule(fullPath: string, parent: Module): NodeModule {
+  private _createModule(
+    fullPath: string,
+    parent: Module,
+    moduleKey: string
+  ): NodeModule {
+    const require = this.diagnostics
+      ? this._interceptedRequire(fullPath, moduleKey)
+      : this.Module.createRequire(fullPath)
     return {
       children: [],
       exports: {},
@@ -150,7 +158,24 @@ export class PackherdModuleLoader {
       parent,
       path: fullPath,
       paths: parent?.paths || [],
-      require: this.Module.createRequire(fullPath),
+      require,
     }
+  }
+
+  private _interceptedRequire(
+    fullPath: string,
+    moduleKey: string
+  ): NodeRequire {
+    const require = this.Module.createRequire(fullPath)
+    const override = (id: string) => {
+      logTrace('Module "%s" is requiring "%s"', moduleKey, id)
+      return require(id)
+    }
+    override.main = require.main
+    override.cache = require.cache
+    // @ts-ignore deprecated
+    override.extensions = require.extensions
+    override.resolve = require.resolve.bind(require)
+    return override
   }
 }
