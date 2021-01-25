@@ -6,6 +6,7 @@ const logInfo = debug('packherd:info')
 const logDebug = debug('packherd:debug')
 const logTrace = debug('packherd:trace')
 
+export * from './loader'
 export type PackherdRequireOpts = ModuleLoaderOpts
 
 export function packherdRequire(
@@ -42,11 +43,10 @@ export function packherdRequire(
     if (Module.builtinModules.includes(moduleUri)) {
       return origLoad(moduleUri, parent, isMain)
     }
-
     const {
-      exports,
-      origin,
       resolved,
+      origin,
+      exports,
       fullPath,
       relPath,
     } = moduleLoader.tryLoad(moduleUri, parent, isMain)

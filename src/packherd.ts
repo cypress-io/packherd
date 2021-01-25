@@ -5,7 +5,7 @@ import { EntryGenerator, PathsMapper } from './generate-entry'
 import { tmpFilePaths } from './utils'
 import { CreateBundle } from './types'
 
-export { packherdRequire, PackherdRequireOpts } from './require'
+export { packherdRequire, PackherdRequireOpts, GetModuleKey } from './require'
 export * from './types'
 
 export type PackherdOpts = {

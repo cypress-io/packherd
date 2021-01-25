@@ -4,18 +4,29 @@ import { ModuleBuildin, ModuleLoadResult, ModuleResolveResult } from './types'
 
 const logInfo = debug('packherd:info')
 
+export type GetModuleKey = (
+  moduleRelativePath: string,
+  moduleUri: string
+) => string
+
 export type ModuleLoaderOpts = {
   diagnostics?: boolean
   // esbuild default bundler exports objects, however the adapted version for snapshots
   // exports functions ala Node.js wrappers instead
+  // TODO(thlorenz): allow both objects and definitions which will be queried, objects first
   exportsObjects: boolean
+  getModuleKey?: GetModuleKey
 }
+
+const defaultGetModuleKey = (moduleRelativePath: string, _moduleUri: string) =>
+  `./${moduleRelativePath}`
 
 export class PackherdModuleLoader {
   hits: number = 0
   misses: number = 0
   private readonly diagnostics: boolean
   private readonly exportsObjects: boolean
+  private readonly getModuleKey: GetModuleKey
 
   constructor(
     private readonly packherdExports: NodeModule['exports'],
@@ -26,6 +37,7 @@ export class PackherdModuleLoader {
   ) {
     this.diagnostics = !!opts.diagnostics
     this.exportsObjects = opts.exportsObjects
+    this.getModuleKey = opts.getModuleKey || defaultGetModuleKey
   }
 
   dumpInfo() {
@@ -43,7 +55,6 @@ export class PackherdModuleLoader {
     isMain: boolean
   ): ModuleResolveResult {
     let fullPath: string
-    let relPath: string
     let resolved: ModuleResolveResult['resolved']
     try {
       fullPath = this.Module._resolveFilename(moduleUri, parent, isMain)
@@ -52,7 +63,7 @@ export class PackherdModuleLoader {
       fullPath = path.resolve(this.projectBaseDir, moduleUri)
       resolved = 'path'
     }
-    relPath = path.relative(this.projectBaseDir, fullPath)
+    const relPath = path.relative(this.projectBaseDir, fullPath)
     return { resolved, fullPath, relPath }
   }
 
@@ -61,12 +72,12 @@ export class PackherdModuleLoader {
     parent: NodeModule,
     isMain: boolean
   ): ModuleLoadResult {
-    let { resolved, relPath, fullPath } = this.resolvePaths(
+    let { resolved, fullPath, relPath } = this.resolvePaths(
       moduleUri,
       parent,
       isMain
     )
-    const packherdKey = `./${relPath}`
+    const packherdKey = this.getModuleKey(moduleUri, relPath)
 
     // 1. try to resolve from packherd module
     const exporter = this.packherdExports[packherdKey]
