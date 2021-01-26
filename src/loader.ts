@@ -153,7 +153,7 @@ export class PackherdModuleLoader {
     }
 
     // 3. If none of the above worked fall back to Node.js loader
-    const exports = this.origLoad(moduleUri, parent, isMain)
+    const exports = this.origLoad(fullPath, parent, isMain)
     this.misses++
     this._dumpInfo()
     return { resolved, origin: 'Module._load', exports, fullPath, relPath }
