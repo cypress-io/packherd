@@ -11,6 +11,8 @@ import {
 
 const logInfo = debug('packherd:info')
 const logTrace = debug('packherd:trace')
+const logSilly = debug('packherd:silly')
+const logWarn = debug('packherd:warn')
 
 export type GetModuleKey = (
   moduleRelativePath: string,
@@ -19,8 +21,8 @@ export type GetModuleKey = (
 
 export type ModuleLoaderOpts = {
   diagnostics?: boolean
-  moduleExports: Record<string, Module>
-  moduleDefinitions: Record<string, ModuleDefinition>
+  moduleExports?: Record<string, Module>
+  moduleDefinitions?: Record<string, ModuleDefinition>
   getModuleKey?: GetModuleKey
 }
 
@@ -115,16 +117,23 @@ export class PackherdModuleLoader {
         if (moduleDefinition != null) {
           mod = this._createModule(fullPath, parent, moduleKey)
           this.loading.start(moduleKey, mod)
-          moduleDefinition(
-            mod.exports,
-            mod,
-            fullPath,
-            path.dirname(fullPath),
-            mod.require
-          )
-          this.loading.finish(moduleKey)
-          this.definitionHits++
-          origin = 'packherd:definition'
+          try {
+            moduleDefinition(
+              mod.exports,
+              mod,
+              fullPath,
+              path.dirname(fullPath),
+              mod.require
+            )
+            this.definitionHits++
+            origin = 'packherd:definition'
+          } catch (err) {
+            logWarn(err.message)
+            logSilly(err)
+            mod = undefined
+          } finally {
+            this.loading.finish(moduleKey)
+          }
         }
       }
     }
