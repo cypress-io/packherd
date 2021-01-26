@@ -98,7 +98,7 @@ export function packherdRequire(entryFile: string, opts: PackherdRequireOpts) {
       case 'packherd:export':
       case 'packherd:definition':
       case 'packherd:loading': {
-        logDebug('Loaded "%s" via %s', moduleUri, origin)
+        logTrace('Loaded "%s" via %s', moduleUri, origin)
         break
       }
     }
