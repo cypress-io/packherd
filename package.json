@@ -6,7 +6,7 @@
   "types": "src/packherd.ts",
   "scripts": {
     "build": "tsc",
-    "test-only": "(cd tests/fixtures/minimal && yarn) && tape ./dist/tests/*.js",
+    "test-only": "(cd tests/fixtures/minimal && yarn) && tape ./dist/tests/*.js && node ./dist/tests/circular/test.js",
     "test": "yarn build && yarn test-only",
     "lint": "prettier -c ./src/",
     "lint:fix": "prettier --format ./src",

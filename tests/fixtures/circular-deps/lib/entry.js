@@ -1,2 +1,2 @@
 const { sum } = require('./foo')
-console.log('sum %d', sum)
+module.exports = { result: sum + sum, origin: 'file' }
