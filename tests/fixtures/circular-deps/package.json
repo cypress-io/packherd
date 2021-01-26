@@ -1,7 +1,7 @@
 {
-  "name": "recursive-deps",
+  "name": "circular-deps",
   "version": "0.0.0",
-  "description": "Example with recursive module dependencies.",
+  "description": "Example with circular module dependencies.",
   "scripts": {
     "start": "node -r ./hook-require.js main",
     "debug": "node --inspect-brk -r ./hook-require.js main",

@@ -18,7 +18,7 @@ function bar(exports, module, __filename, __dirname, require) {
 
 function entry(exports, module, __filename, __dirname, require) {
   const { sum } = require('./foo')
-  console.log('sum %d', sum)
+  module.exports = sum + sum
 }
 
 module.exports = {
