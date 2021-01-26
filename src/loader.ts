@@ -27,6 +27,24 @@ export type ModuleLoaderOpts = {
 const defaultGetModuleKey = (moduleRelativePath: string, _moduleUri: string) =>
   `./${moduleRelativePath}`
 
+class LoadingModules {
+  private readonly currentlyLoading: Map<string, Module> = new Map()
+  start(id: string, mod: Module) {
+    if (this.currentlyLoading.has(id)) {
+      throw new Error(`Already loading ${id}`)
+    }
+    this.currentlyLoading.set(id, mod)
+  }
+
+  retrieve(id: string) {
+    return this.currentlyLoading.get(id)
+  }
+
+  finish(id: string) {
+    this.currentlyLoading.delete(id)
+  }
+}
+
 export class PackherdModuleLoader {
   exportHits: number = 0
   definitionHits: number = 0
@@ -35,6 +53,7 @@ export class PackherdModuleLoader {
   private readonly getModuleKey: GetModuleKey
   private readonly moduleExports: Record<string, Module>
   private readonly moduleDefinitions: Record<string, ModuleDefinition>
+  private readonly loading: LoadingModules
 
   constructor(
     private readonly Module: ModuleBuildin,
@@ -50,6 +69,7 @@ export class PackherdModuleLoader {
     )
     this.moduleExports = opts.moduleExports ?? {}
     this.moduleDefinitions = opts.moduleDefinitions ?? {}
+    this.loading = new LoadingModules()
   }
 
   tryLoad(
@@ -62,6 +82,16 @@ export class PackherdModuleLoader {
       parent,
       isMain
     )
+    const moduleCached = this.Module._cache[fullPath]
+    if (moduleCached != null)
+      return {
+        resolved,
+        origin: 'Module._cache',
+        exports: moduleCached.exports,
+        fullPath,
+        relPath,
+      }
+
     const moduleKey = this.getModuleKey(moduleUri, relPath)
 
     // 1. try to resolve from module exports
@@ -71,24 +101,31 @@ export class PackherdModuleLoader {
     let origin: ModuleLoadResult['origin'] | undefined
     if (moduleExport != null) {
       mod = this._createModule(fullPath, parent, moduleKey)
-      debugger
       mod.exports = moduleExport.exports
       this.exportHits++
       origin = 'packherd:export'
     } else {
-      // 2. try to resolve from module definitions
-      const moduleDefinition = this.moduleDefinitions[moduleKey]
-      if (moduleDefinition != null) {
-        mod = this._createModule(fullPath, parent, moduleKey)
-        moduleDefinition(
-          mod.exports,
-          mod,
-          fullPath,
-          path.dirname(fullPath),
-          mod.require
-        )
-        this.definitionHits++
-        origin = 'packherd:definition'
+      const loadingModule = this.loading.retrieve(moduleKey)
+      if (loadingModule != null) {
+        mod = loadingModule
+        origin = 'packherd:loading'
+      } else {
+        // 2. try to resolve from module definitions
+        const moduleDefinition = this.moduleDefinitions[moduleKey]
+        if (moduleDefinition != null) {
+          mod = this._createModule(fullPath, parent, moduleKey)
+          this.loading.start(moduleKey, mod)
+          moduleDefinition(
+            mod.exports,
+            mod,
+            fullPath,
+            path.dirname(fullPath),
+            mod.require
+          )
+          this.loading.finish(moduleKey)
+          this.definitionHits++
+          origin = 'packherd:definition'
+        }
       }
     }
     if (mod != null) {
