@@ -9,8 +9,6 @@ const packherd = require('../../package.json').name
 export type PathsMapper = (s: string) => string
 export const identityMapper: PathsMapper = (s: string) => s
 
-const cwd = process.cwd()
-
 export class EntryGenerator {
   private readonly entryDirectory: string
   constructor(
@@ -27,7 +25,7 @@ export class EntryGenerator {
     const relToCwdPaths = this._resolveRelativePaths(meta)
     relToCwdPaths.sort()
 
-    const fullPaths = relToCwdPaths.map((x) => path.join(cwd, x))
+    const fullPaths = relToCwdPaths.map((x) => path.join(process.cwd(), x))
     const paths = fullPaths.map((x) => path.relative(this.entryDirectory, x))
 
     const entry = ['// vim: set ft=text:']
