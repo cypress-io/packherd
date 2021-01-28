@@ -9,7 +9,7 @@ import {
   ModuleResolveResult,
 } from './types'
 
-const logInfo = debug('packherd:info')
+const logDebug = debug('packherd:debug')
 const logTrace = debug('packherd:trace')
 const logSilly = debug('packherd:silly')
 const logWarn = debug('packherd:warn')
@@ -161,7 +161,7 @@ export class PackherdModuleLoader {
 
   private _dumpInfo() {
     if (this.diagnostics) {
-      logInfo({
+      logDebug({
         exportHits: this.exportHits,
         definitionHits: this.definitionHits,
         misses: this.misses,
