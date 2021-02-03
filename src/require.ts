@@ -94,7 +94,6 @@ export function packherdRequire(entryFile: string, opts: PackherdRequireOpts) {
         )
         break
       }
-      case 'Module._load':
       case 'packherd:export':
       case 'packherd:definition':
       case 'packherd:loading': {
