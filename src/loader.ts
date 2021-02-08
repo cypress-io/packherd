@@ -46,6 +46,10 @@ class LoadingModules {
   finish(id: string) {
     this.currentlyLoading.delete(id)
   }
+
+  stack() {
+    return Array.from(this.currentlyLoading.keys())
+  }
 }
 
 export class PackherdModuleLoader {
@@ -145,7 +149,7 @@ export class PackherdModuleLoader {
 
       this.Module._cache[fullPath] = mod
       this._dumpInfo()
-      this.benchmark.timeEnd(fullPath, origin)
+      this.benchmark.timeEnd(fullPath, origin, this.loading.stack())
 
       return {
         resolved,
@@ -160,7 +164,7 @@ export class PackherdModuleLoader {
     const exports = this.origLoad(fullPath, parent, isMain)
     this.misses++
     this._dumpInfo()
-    this.benchmark.timeEnd(fullPath, 'Module._load')
+    this.benchmark.timeEnd(fullPath, 'Module._load', this.loading.stack())
     return { resolved, origin: 'Module._load', exports, fullPath, relPath }
   }
 

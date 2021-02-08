@@ -20,7 +20,10 @@ export function packherdRequire(entryFile: string, opts: PackherdRequireOpts) {
     'need to provide moduleDefinitions, moduleDefinitions or both'
   )
 
-  const benchmark: Benchmark = setupBenchmark(opts.requireStatsFile)
+  const benchmark: Benchmark = setupBenchmark(
+    projectBaseDir,
+    opts.requireStatsFile
+  )
 
   const exportKeysLen =
     opts.moduleExports != null ? Object.keys(opts.moduleExports).length : 0
