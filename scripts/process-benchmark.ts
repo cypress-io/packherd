@@ -1,13 +1,10 @@
-import debug from 'debug'
+import { strict as assert } from 'assert'
 import { LoadInfo, PersistedLoadInfos } from 'src/benchmark'
 import { canAccessSync } from '../src/utils'
+import { Analyzer } from './analyzer'
+import { threeDecimals } from './utils'
 
-const logError = debug('bench:error')
-
-function threeDecimals(n: number) {
-  return Math.round(n * 1000) / 1000
-}
-
+// @ts-ignore
 function makePretty([key, { duration, stack }]: [string, LoadInfo]) {
   return [key, { duration: threeDecimals(duration), stack }]
 }
@@ -20,11 +17,25 @@ function byDurationReversed(
 }
 
 const benchFile = process.argv[2]
+const esbuildMetaFile = process.argv[3]
 
 try {
+  assert(benchFile != null, 'need to provide benchFile as first arg')
   canAccessSync(benchFile)
 } catch (err) {
-  logError('Cannot access', benchFile)
+  console.error('Cannot access %s, %o', benchFile, err)
+  process.exit(1)
+}
+
+try {
+  assert(
+    esbuildMetaFile != null,
+    'need to provide esbuildMetaFile as second arg'
+  )
+  canAccessSync(esbuildMetaFile)
+} catch (err) {
+  console.error('Cannot access %s, %o', esbuildMetaFile, err)
+  process.exit(1)
 }
 
 const {
@@ -43,11 +54,24 @@ const allSorted = [
   ...moduleLoads,
 ].sort(byDurationReversed)
 
-const result = {
-  packherdExports: packherdExports.map(makePretty),
-  packherdDefinitions: packherdDefinitions.map(makePretty),
-  moduleLoads: moduleLoads.map(makePretty),
-  allSorted: allSorted.map(makePretty),
-}
+;(async () => {
+  try {
+    const analyzed = await new Analyzer(
+      allSorted,
+      require(esbuildMetaFile)
+    ).analyze()
 
-console.log(JSON.stringify(result, null, 2))
+    const result = {
+      // packherdExports: packherdExports.map(makePretty),
+      // packherdDefinitions: packherdDefinitions.map(makePretty),
+      // moduleLoads: moduleLoads.map(makePretty),
+      // allSorted: allSorted.map(makePretty),
+      analyzed: Array.from(analyzed),
+    }
+
+    console.log(JSON.stringify(result, null, 2))
+  } catch (err) {
+    console.error(err)
+    process.exit(1)
+  }
+})()
