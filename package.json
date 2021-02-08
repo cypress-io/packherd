@@ -4,6 +4,9 @@
   "description": "Herds all dependencies reachable from an entry and packs them.",
   "main": "dist/src/packherd.js",
   "types": "src/packherd.ts",
+  "bin": {
+    "process-benchmark": "./dist/scripts/process-benchmark.js"
+  },
   "scripts": {
     "build": "tsc",
     "test-only": "(cd tests/fixtures/minimal && yarn) && tape ./dist/tests/*.js && node ./dist/tests/circular/test.js",

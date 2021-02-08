@@ -2,7 +2,7 @@ import fs from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
 
-function canAccessSync(p: string) {
+export function canAccessSync(p: string) {
   try {
     fs.accessSync(p)
     return true
