@@ -8,6 +8,7 @@ import {
   ModuleLoadResult,
   ModuleResolveResult,
 } from './types'
+import { Benchmark } from './benchmark'
 
 const logDebug = debug('packherd:debug')
 const logTrace = debug('packherd:trace')
@@ -61,6 +62,7 @@ export class PackherdModuleLoader {
     private readonly Module: ModuleBuildin,
     private readonly origLoad: ModuleBuildin['_load'],
     private readonly projectBaseDir: string,
+    private readonly benchmark: Benchmark,
     opts: ModuleLoaderOpts
   ) {
     this.diagnostics = !!opts.diagnostics
@@ -94,6 +96,7 @@ export class PackherdModuleLoader {
         relPath,
       }
 
+    this.benchmark.time(fullPath)
     const moduleKey = this.getModuleKey(moduleUri, relPath)
 
     // 1. try to resolve from module exports
@@ -142,6 +145,7 @@ export class PackherdModuleLoader {
 
       this.Module._cache[fullPath] = mod
       this._dumpInfo()
+      this.benchmark.timeEnd(fullPath, origin)
 
       return {
         resolved,
@@ -156,6 +160,7 @@ export class PackherdModuleLoader {
     const exports = this.origLoad(fullPath, parent, isMain)
     this.misses++
     this._dumpInfo()
+    this.benchmark.timeEnd(fullPath, 'Module._load')
     return { resolved, origin: 'Module._load', exports, fullPath, relPath }
   }
 

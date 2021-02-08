@@ -1,6 +1,7 @@
 import { strict as assert } from 'assert'
 import debug from 'debug'
 import path from 'path'
+import { Benchmark, setupBenchmark } from './benchmark'
 import { ModuleLoaderOpts, PackherdModuleLoader } from './loader'
 
 const logInfo = debug('packherd:info')
@@ -8,7 +9,9 @@ const logDebug = debug('packherd:debug')
 const logTrace = debug('packherd:trace')
 
 export * from './loader'
-export type PackherdRequireOpts = ModuleLoaderOpts
+export type PackherdRequireOpts = ModuleLoaderOpts & {
+  requireStatsFile?: string
+}
 
 export function packherdRequire(entryFile: string, opts: PackherdRequireOpts) {
   const projectBaseDir = path.dirname(entryFile)
@@ -16,6 +19,8 @@ export function packherdRequire(entryFile: string, opts: PackherdRequireOpts) {
     opts.moduleExports != null || opts.moduleDefinitions != null,
     'need to provide moduleDefinitions, moduleDefinitions or both'
   )
+
+  const benchmark: Benchmark = setupBenchmark(opts.requireStatsFile)
 
   const exportKeysLen =
     opts.moduleExports != null ? Object.keys(opts.moduleExports).length : 0
@@ -37,6 +42,7 @@ export function packherdRequire(entryFile: string, opts: PackherdRequireOpts) {
     Module,
     origLoad,
     projectBaseDir,
+    benchmark,
     opts
   )
 
