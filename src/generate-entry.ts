@@ -1,8 +1,8 @@
 import path from 'path'
 
-import { strict as assert } from 'assert'
 import { Metadata } from 'esbuild'
 import { CreateBundle } from './types'
+import { getMetadata } from './get-metadata'
 
 const packherd = require('../../package.json').name
 
@@ -35,14 +35,7 @@ export class EntryGenerator {
   }
 
   private async _getMetadata(): Promise<Metadata> {
-    const { outputFiles } = await this.createBundle({
-      metafile: '<stdout:meta>',
-      outfile: '<stdout:out>',
-      entryFilePath: this.entryFile,
-      outbase: this.entryDirectory,
-    })
-    assert(outputFiles.length >= 2, 'expecting at least two outfiles')
-    return JSON.parse(outputFiles[1].text)
+    return getMetadata(this.createBundle, this.entryFile, this.entryDirectory)
   }
 
   private _resolveRelativePaths(meta: Metadata) {
@@ -51,7 +44,6 @@ export class EntryGenerator {
     if (this.nodeModulesOnly) {
       relPaths = relPaths.filter((x) => x.includes('node_modules'))
     }
-
     return relPaths
       .map((x) => x.replace(/^node_modules\//, './node_modules/'))
       .map(this.pathsMapper)
