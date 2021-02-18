@@ -11,7 +11,7 @@ export type ModuleDefinition = (
 ) => NodeModule
 
 export type ModuleResolveResult = {
-  resolved: 'module' | 'path'
+  resolved: 'module:node' | 'module:tsc' | 'path'
   fullPath: string
   relPath: string
 }

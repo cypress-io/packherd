@@ -11,6 +11,7 @@ const logTrace = debug('packherd:trace')
 export * from './loader'
 export type PackherdRequireOpts = ModuleLoaderOpts & {
   requireStatsFile?: string
+  supportTS?: boolean
 }
 
 export function packherdRequire(entryFile: string, opts: PackherdRequireOpts) {
@@ -41,6 +42,12 @@ export function packherdRequire(entryFile: string, opts: PackherdRequireOpts) {
   const Module = require('module')
   const origLoad = Module._load
 
+  if (!!opts.supportTS) {
+    logInfo('Enabling TS support')
+    const { hookTranspileTs } = require('./transpile-ts')
+    hookTranspileTs(Module, projectBaseDir, logInfo)
+  }
+
   const moduleLoader = new PackherdModuleLoader(
     Module,
     origLoad,
@@ -61,56 +68,60 @@ export function packherdRequire(entryFile: string, opts: PackherdRequireOpts) {
     if (Module.builtinModules.includes(moduleUri)) {
       return origLoad(moduleUri, parent, isMain)
     }
-    const {
-      resolved,
-      origin,
-      exports,
-      fullPath,
-      relPath,
-    } = moduleLoader.tryLoad(moduleUri, parent, isMain)
+    try {
+      const {
+        resolved,
+        origin,
+        exports,
+        fullPath,
+        relPath,
+      } = moduleLoader.tryLoad(moduleUri, parent, isMain)
 
-    switch (resolved) {
-      case 'module': {
-        logTrace(
-          'Resolved "%s" via %s (%s | %s)',
-          moduleUri,
-          resolved,
-          relPath,
-          fullPath
-        )
-        break
+      switch (resolved) {
+        case 'module:node': {
+          logTrace(
+            'Resolved "%s" via %s (%s | %s)',
+            moduleUri,
+            resolved,
+            relPath,
+            fullPath
+          )
+          break
+        }
+        case 'path': {
+          logDebug(
+            'Resolved "%s" via %s (%s | %s)',
+            moduleUri,
+            resolved,
+            relPath,
+            fullPath
+          )
+          break
+        }
       }
-      case 'path': {
-        logDebug(
-          'Resolved "%s" via %s (%s | %s)',
-          moduleUri,
-          resolved,
-          relPath,
-          fullPath
-        )
-        break
+
+      switch (origin) {
+        case 'Module._load': {
+          logDebug(
+            'Loaded "%s" via %s resolved as (%s | %s)',
+            moduleUri,
+            origin,
+            relPath,
+            fullPath
+          )
+          break
+        }
+        case 'packherd:export':
+        case 'packherd:definition':
+        case 'packherd:loading': {
+          logTrace('Loaded "%s" via %s', moduleUri, origin)
+          break
+        }
       }
+
+      return exports
+    } catch (err) {
+      debugger
     }
-
-    switch (origin) {
-      case 'Module._load': {
-        logDebug(
-          'Loaded "%s" via %s resolved as (%s | %s)',
-          moduleUri,
-          origin,
-          relPath,
-          fullPath
-        )
-        break
-      }
-      case 'packherd:export':
-      case 'packherd:definition':
-      case 'packherd:loading': {
-        logTrace('Loaded "%s" via %s', moduleUri, origin)
-        break
-      }
-    }
-
-    return exports
   }
 }

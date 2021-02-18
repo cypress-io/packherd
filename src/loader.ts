@@ -3,7 +3,7 @@ import { strict as assert } from 'assert'
 import Module from 'module'
 import path from 'path'
 import {
-  ModuleBuildin,
+  ModuleBuildin as ModuleBuiltin,
   ModuleDefinition,
   ModuleLoadResult,
   ModuleResolveResult,
@@ -63,8 +63,8 @@ export class PackherdModuleLoader {
   private readonly loading: LoadingModules
 
   constructor(
-    private readonly Module: ModuleBuildin,
-    private readonly origLoad: ModuleBuildin['_load'],
+    private readonly Module: ModuleBuiltin,
+    private readonly origLoad: ModuleBuiltin['_load'],
     private readonly projectBaseDir: string,
     private readonly benchmark: Benchmark,
     opts: ModuleLoaderOpts
@@ -160,8 +160,9 @@ export class PackherdModuleLoader {
       }
     }
 
-    // 3. If none of the above worked fall back to Node.js loader
-    const exports = this.origLoad(fullPath, parent, isMain)
+    // 3. If none of the above worked fall back to Node.js
+    let exports
+    exports = this.origLoad(fullPath, parent, isMain)
     this.misses++
     this._dumpInfo()
     this.benchmark.timeEnd(fullPath, 'Module._load', this.loading.stack())
@@ -183,17 +184,43 @@ export class PackherdModuleLoader {
     parent: NodeModule,
     isMain: boolean
   ): ModuleResolveResult {
-    let fullPath: string
+    let fullPath: string | undefined
     let resolved: ModuleResolveResult['resolved']
-    try {
-      fullPath = this.Module._resolveFilename(moduleUri, parent, isMain)
-      resolved = 'module'
-    } catch (err) {
-      fullPath = path.resolve(this.projectBaseDir, moduleUri)
-      resolved = 'path'
+
+    // Not sure why this is set incorrectly at times, but it breaks module resolution
+    // It seems it is related to electron's use of webpack
+    if (parent.id === '.') {
+      parent.id = parent.filename
+      // TODO(thlorenz): HACK
+      // We need to detect in a more generic way if the require comes from inside a bundle
+      // and thus is relative to the project root.
+    } else if (
+      moduleUri.startsWith('./packages') ||
+      moduleUri.startsWith('./node_modules')
+    ) {
+      const fullModuleUri = path.resolve(this.projectBaseDir, moduleUri)
+      moduleUri = `./${path.relative(parent.path, fullModuleUri)}`
     }
+
+    resolved = 'module:node'
+    fullPath = this._tryResolveFilename(moduleUri, parent, isMain)
+    assert(fullPath != null, `packherd: unresolvable module ${moduleUri}`)
+
     const relPath = path.relative(this.projectBaseDir, fullPath)
     return { resolved, fullPath, relPath }
+  }
+
+  private _tryResolveFilename(
+    moduleUri: string | undefined,
+    parent: NodeModule,
+    isMain: boolean
+  ) {
+    if (moduleUri == null) return undefined
+    try {
+      return this.Module._resolveFilename(moduleUri, parent, isMain)
+    } catch (err) {
+      return undefined
+    }
   }
 
   private _createModule(
