@@ -53,3 +53,13 @@ export type CreateBundleResult = {
 export type CreateBundle = (
   args: CreateBundleOpts
 ) => Promise<CreateBundleResult>
+
+export interface CompileCache {
+  get(fullPath: string): string | undefined
+  add(origFullPath: string, convertedContent: string): void
+  clearSync(): void
+}
+export type InitCompileCache = (
+  projectBasedir: string,
+  cacheDir?: string
+) => CompileCache | undefined

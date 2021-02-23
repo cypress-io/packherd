@@ -1,6 +1,6 @@
 import type { Debugger } from 'debug'
 import { TransformOptions, transformSync } from 'esbuild'
-import { DirtSimpleFileCache } from 'dirt-simple-file-cache'
+import type { CompileCache, InitCompileCache } from './types'
 import fs from 'fs'
 import path from 'path'
 
@@ -18,35 +18,41 @@ const DEFAULT_TRANSFORM_OPTS: TransformOptions = {
 
 export function transpileTs(
   fullModuleUri: string,
-  cache: DirtSimpleFileCache
+  cache?: CompileCache
 ): string {
-  const cached = cache.get(fullModuleUri)
+  const cached = (cache != null && cache.get(fullModuleUri)) || null
   if (cached != null) return cached
 
   const ts = fs.readFileSync(fullModuleUri, 'utf8')
-  return transpileTsCode(fullModuleUri, cache, ts)
+  return transpileTsCode(fullModuleUri, ts, cache)
 }
 
 export function transpileTsCode(
   fullModuleUri: string,
-  cache: DirtSimpleFileCache,
-  ts: string
+  ts: string,
+  cache?: CompileCache
 ): string {
-  const cached = cache.get(fullModuleUri)
+  const cached = (cache != null && cache.get(fullModuleUri)) || null
   if (cached != null) return cached
 
   const opts = DEFAULT_TRANSFORM_OPTS
   const result = transformSync(ts, opts)
-  cache.add(fullModuleUri, result.code)
+  if (cache != null) {
+    cache.add(fullModuleUri, result.code)
+  }
   return result.code
 }
 
 export function hookTranspileTs(
   Module: EnhancedModule,
   projectBaseDir: string,
-  log: Debugger
+  log: Debugger,
+  initCompileCache?: InitCompileCache
 ) {
-  const cache = DirtSimpleFileCache.initSync(projectBaseDir)
+  const cache =
+    initCompileCache == null
+      ? undefined
+      : initCompileCache(projectBaseDir, '/tmp/cypress-cache')
 
   const defaultLoader = Module._extensions['.js']
   Module._extensions['.ts'] = function (mod: EnhancedModule, filename: string) {
@@ -61,7 +67,7 @@ export function hookTranspileTs(
         log('transpiling %s', path.relative(projectBaseDir, filename))
 
         // console.time(`ts:transpile ${filename}`)
-        const transpiled = transpileTsCode(filename, cache, code)
+        const transpiled = transpileTsCode(filename, code, cache)
         // console.timeEnd(`ts:transpile ${filename}`)
 
         const compiled: NodeModule = mod._compile(
