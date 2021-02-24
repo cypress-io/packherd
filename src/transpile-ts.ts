@@ -1,6 +1,6 @@
 import type { Debugger } from 'debug'
 import { TransformOptions, transformSync } from 'esbuild'
-import type { CompileCache, InitCompileCache } from './types'
+import type { TranspileCache, InitTranspileCache } from './types'
 import fs from 'fs'
 import path from 'path'
 
@@ -18,24 +18,28 @@ const DEFAULT_TRANSFORM_OPTS: TransformOptions = {
 
 export function transpileTs(
   fullModuleUri: string,
-  cache?: CompileCache
+  tsconfig?: TransformOptions['tsconfigRaw'],
+  cache?: TranspileCache
 ): string {
   const cached = (cache != null && cache.get(fullModuleUri)) || null
   if (cached != null) return cached
 
   const ts = fs.readFileSync(fullModuleUri, 'utf8')
-  return transpileTsCode(fullModuleUri, ts, cache)
+  return transpileTsCode(fullModuleUri, ts, tsconfig, cache)
 }
 
 export function transpileTsCode(
   fullModuleUri: string,
   ts: string,
-  cache?: CompileCache
+  tsconfig?: TransformOptions['tsconfigRaw'],
+  cache?: TranspileCache
 ): string {
   const cached = (cache != null && cache.get(fullModuleUri)) || null
   if (cached != null) return cached
 
-  const opts = DEFAULT_TRANSFORM_OPTS
+  const opts = Object.assign({}, DEFAULT_TRANSFORM_OPTS, {
+    tsconfigRaw: tsconfig,
+  })
   const result = transformSync(ts, opts)
   if (cache != null) {
     cache.add(fullModuleUri, result.code)
@@ -47,7 +51,8 @@ export function hookTranspileTs(
   Module: EnhancedModule,
   projectBaseDir: string,
   log: Debugger,
-  initCompileCache?: InitCompileCache
+  initCompileCache?: InitTranspileCache,
+  tsconfig?: TransformOptions['tsconfigRaw']
 ) {
   const cache =
     initCompileCache == null
@@ -68,7 +73,7 @@ export function hookTranspileTs(
         log('transpiling %s', path.relative(projectBaseDir, filename))
 
         // console.time(`ts:transpile ${filename}`)
-        const transpiled = transpileTsCode(filename, code, cache)
+        const transpiled = transpileTsCode(filename, code, tsconfig, cache)
         // console.timeEnd(`ts:transpile ${filename}`)
 
         const compiled: NodeModule = mod._compile(

@@ -3,7 +3,7 @@ import debug from 'debug'
 import path from 'path'
 import { Benchmark, setupBenchmark } from './benchmark'
 import { ModuleLoaderOpts, PackherdModuleLoader } from './loader'
-import type { InitCompileCache } from './types'
+import type { PackherdTranspileOpts } from './types'
 
 const logInfo = debug('packherd:info')
 const logDebug = debug('packherd:debug')
@@ -12,8 +12,11 @@ const logTrace = debug('packherd:trace')
 export * from './loader'
 export type PackherdRequireOpts = ModuleLoaderOpts & {
   requireStatsFile?: string
-  supportTS?: boolean
-  initCompileCache?: InitCompileCache
+  transpileOpts?: Partial<PackherdTranspileOpts>
+}
+
+const DEFAULT_TRANSPILE_OPTS = {
+  supportTS: false,
 }
 
 export function packherdRequire(entryFile: string, opts: PackherdRequireOpts) {
@@ -44,10 +47,23 @@ export function packherdRequire(entryFile: string, opts: PackherdRequireOpts) {
   const Module = require('module')
   const origLoad = Module._load
 
-  if (!!opts.supportTS) {
+  const { supportTS, initTranspileCache, tsconfig } = Object.assign(
+    {},
+    DEFAULT_TRANSPILE_OPTS,
+    opts.transpileOpts
+  )
+
+  if (supportTS) {
     logInfo('Enabling TS support')
+    logDebug({ supportTS, initTranspileCache, tsconfig })
     const { hookTranspileTs } = require('./transpile-ts')
-    hookTranspileTs(Module, projectBaseDir, logInfo, opts.initCompileCache)
+    hookTranspileTs(
+      Module,
+      projectBaseDir,
+      logInfo,
+      initTranspileCache,
+      tsconfig
+    )
   }
 
   const moduleLoader = new PackherdModuleLoader(

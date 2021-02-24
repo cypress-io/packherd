@@ -1,4 +1,9 @@
-import { BuildOptions, BuildResult, OutputFile } from 'esbuild'
+import {
+  BuildOptions,
+  BuildResult,
+  OutputFile,
+  TransformOptions,
+} from 'esbuild'
 
 type NodeRequireFunction = (id: string) => any
 
@@ -54,12 +59,18 @@ export type CreateBundle = (
   args: CreateBundleOpts
 ) => Promise<CreateBundleResult>
 
-export interface CompileCache {
+export interface TranspileCache {
   get(fullPath: string): string | undefined
   add(origFullPath: string, convertedContent: string): void
   clearSync(): void
 }
-export type InitCompileCache = (
+export type InitTranspileCache = (
   projectBasedir: string,
   cacheDir?: string
-) => CompileCache | undefined
+) => TranspileCache | undefined
+
+export type PackherdTranspileOpts = {
+  tsconfig?: TransformOptions['tsconfigRaw']
+  supportTS?: boolean
+  initTranspileCache?: InitTranspileCache
+}
