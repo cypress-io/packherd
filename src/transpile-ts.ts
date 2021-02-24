@@ -58,9 +58,10 @@ export function hookTranspileTs(
   Module._extensions['.ts'] = function (mod: EnhancedModule, filename: string) {
     const origCompile = mod._compile
 
-    // TODO(thlorenz): this reads the code first before deciding what is already in the cache
-    // how can we improve on that, i.e. we'd prefer calling `transpileTs` instead?
-
+    // NOTE: I verified that bypassing the laoder to avoid reading `code` that goes unused in case
+    // the transpiled version is alreay in the cache does not make a notable difference.
+    // Also if we do that naívely we loose the cache checks that Node.js does for us when using the
+    // default loader.
     mod._compile = (code: string) => {
       mod._compile = origCompile
       try {
