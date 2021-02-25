@@ -26,26 +26,7 @@ export function packherdRequire(entryFile: string, opts: PackherdRequireOpts) {
     'need to provide moduleDefinitions, moduleDefinitions or both'
   )
 
-  const benchmark: Benchmark = setupBenchmark(
-    projectBaseDir,
-    opts.requireStatsFile
-  )
-
-  const exportKeysLen =
-    opts.moduleExports != null ? Object.keys(opts.moduleExports).length : 0
-  const definitionKeysLen =
-    opts.moduleDefinitions != null
-      ? Object.keys(opts.moduleDefinitions).length
-      : 0
-  logInfo(
-    'packherd defining %d exports and %d definitions!',
-    exportKeysLen,
-    definitionKeysLen
-  )
-  logInfo({ projectBaseDir })
-
   const Module = require('module')
-  const origLoad = Module._load
 
   const { supportTS, initTranspileCache, tsconfig } = Object.assign(
     {},
@@ -65,6 +46,35 @@ export function packherdRequire(entryFile: string, opts: PackherdRequireOpts) {
       tsconfig
     )
   }
+
+  const exportKeysLen =
+    opts.moduleExports != null ? Object.keys(opts.moduleExports).length : 0
+  const definitionKeysLen =
+    opts.moduleDefinitions != null
+      ? Object.keys(opts.moduleDefinitions).length
+      : 0
+  logInfo(
+    'packherd defining %d exports and %d definitions!',
+    exportKeysLen,
+    definitionKeysLen
+  )
+  logInfo({ projectBaseDir })
+
+  // Depending from where the require hook is applied, the parent process may not contain a
+  // cache and only use packherd to provide TypeScript transpile support.
+  if (exportKeysLen === 0 && definitionKeysLen === 0) {
+    logInfo(
+      'No moduleExports nor moduleDefinitions provided, not hooking Module._load'
+    )
+    return
+  }
+
+  const benchmark: Benchmark = setupBenchmark(
+    projectBaseDir,
+    opts.requireStatsFile
+  )
+
+  const origLoad = Module._load
 
   const moduleLoader = new PackherdModuleLoader(
     Module,
