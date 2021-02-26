@@ -1,6 +1,4 @@
-import { strict as assert } from 'assert'
 import debug from 'debug'
-import path from 'path'
 import { Benchmark, setupBenchmark } from './benchmark'
 import { ModuleLoaderOpts, PackherdModuleLoader } from './loader'
 import type { PackherdTranspileOpts } from './types'
@@ -19,13 +17,10 @@ const DEFAULT_TRANSPILE_OPTS = {
   supportTS: false,
 }
 
-export function packherdRequire(entryFile: string, opts: PackherdRequireOpts) {
-  const projectBaseDir = path.dirname(entryFile)
-  assert(
-    opts.moduleExports != null || opts.moduleDefinitions != null,
-    'need to provide moduleDefinitions, moduleDefinitions or both'
-  )
-
+export function packherdRequire(
+  projectBaseDir: string,
+  opts: PackherdRequireOpts
+) {
   const Module = require('module')
 
   const { supportTS, initTranspileCache, tsconfig } = Object.assign(
