@@ -7,6 +7,7 @@ import {
   ModuleDefinition,
   ModuleLoadResult,
   ModuleResolveResult,
+  ModuleMapper,
 } from './types'
 import { Benchmark } from './benchmark'
 
@@ -25,6 +26,7 @@ export type ModuleLoaderOpts = {
   moduleExports?: Record<string, Module>
   moduleDefinitions?: Record<string, ModuleDefinition>
   getModuleKey?: GetModuleKey
+  moduleMapper?: ModuleMapper
 }
 
 const defaultGetModuleKey = (moduleRelativePath: string, _moduleUri: string) =>
@@ -52,6 +54,14 @@ class LoadingModules {
   }
 }
 
+function identity(
+  _mod: NodeModule,
+  moduleUri: string,
+  _projectBasedir: string
+) {
+  return moduleUri
+}
+
 export class PackherdModuleLoader {
   exportHits: number = 0
   definitionHits: number = 0
@@ -61,6 +71,7 @@ export class PackherdModuleLoader {
   private readonly moduleExports: Record<string, Module>
   private readonly moduleDefinitions: Record<string, ModuleDefinition>
   private readonly loading: LoadingModules
+  private readonly moduleMapper: ModuleMapper
 
   constructor(
     private readonly Module: ModuleBuiltin,
@@ -77,6 +88,7 @@ export class PackherdModuleLoader {
     )
     this.moduleExports = opts.moduleExports ?? {}
     this.moduleDefinitions = opts.moduleDefinitions ?? {}
+    this.moduleMapper = opts.moduleMapper ?? identity
     this.loading = new LoadingModules()
   }
 
@@ -187,32 +199,7 @@ export class PackherdModuleLoader {
     let fullPath: string | undefined
     let resolved: ModuleResolveResult['resolved']
 
-    // Not sure why this is set incorrectly at times, but it breaks module resolution
-    // It seems it is related to electron's use of webpack
-    if (parent.id === '.') {
-      parent.id = parent.filename
-      // TODO(thlorenz): HACK
-      // We need to detect in a more generic way if the require comes from inside a bundle
-      // and thus is relative to the project root.
-    } else if (
-      moduleUri.startsWith('./packages') ||
-      moduleUri.startsWith('./node_modules')
-    ) {
-      const fullModuleUri = path.resolve(this.projectBaseDir, moduleUri)
-      moduleUri = `./${path.relative(parent.path, fullModuleUri)}`
-    } else if (parent.id.includes('v8-snapshot-utils')) {
-      // TODO(thlorenz): HACK those magic hints on how to treat things differently need
-      // to be configurable, i.e. via a parent module mapper function
-      // There are other cases we don't cover yet, i.e. a relative require coming out of the
-      // snapshot, i.e. to `./hook-require` from `./ts/register'.
-      // However this seems to be the only one and we want to skip loading that anyways since
-      // we already hooked the require to get here.
-      const fakeOrigin = path.join(this.projectBaseDir, 'package.json')
-      parent.id = parent.filename = fakeOrigin
-      parent.path = path.dirname(fakeOrigin)
-      parent.paths.unshift(path.join(parent.path, 'node_modules'))
-    }
-
+    moduleUri = this.moduleMapper(parent, moduleUri, this.projectBaseDir)
     resolved = 'module:node'
     fullPath = this._tryResolveFilename(moduleUri, parent, isMain)
     assert(fullPath != null, `packherd: unresolvable module ${moduleUri}`)

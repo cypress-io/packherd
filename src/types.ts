@@ -31,6 +31,12 @@ export type ModuleLoadResult = ModuleResolveResult & {
     | 'Module._load'
 }
 
+export type ModuleMapper = (
+  parent: NodeModule,
+  moduleUri: string,
+  projectBasedir: string
+) => string
+
 export type ModuleBuildin = typeof import('module') & {
   _resolveFilename(
     moduleUri: string,
