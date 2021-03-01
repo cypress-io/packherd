@@ -1,4 +1,5 @@
 const debug = require('debug')
+const path = require('path')
 const definitions = require('./definitions')
 const { packherdRequire } = require('../../../')
 const entryFile = require.resolve('./lib/entry')
@@ -10,7 +11,8 @@ function getModuleKey(moduleRelativePath, moduleUri) {
   return moduleUri
 }
 
-packherdRequire(entryFile, {
+const projectBaseDir = path.dirname(entryFile)
+packherdRequire(projectBaseDir, {
   diagnostics: true,
   moduleDefinitions: definitions,
   getModuleKey,
