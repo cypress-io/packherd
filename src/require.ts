@@ -6,6 +6,7 @@ import type { PackherdTranspileOpts } from './types'
 const logInfo = debug('packherd:info')
 const logDebug = debug('packherd:debug')
 const logTrace = debug('packherd:trace')
+const logError = debug('packherd:error')
 
 export * from './loader'
 export type PackherdRequireOpts = ModuleLoaderOpts & {
@@ -28,6 +29,7 @@ export function packherdRequire(
     DEFAULT_TRANSPILE_OPTS,
     opts.transpileOpts
   )
+  const diagnostics = opts.diagnostics ?? false
 
   if (supportTS) {
     logInfo('Enabling TS support')
@@ -37,6 +39,7 @@ export function packherdRequire(
       Module,
       projectBaseDir,
       logInfo,
+      diagnostics,
       initTranspileCache,
       tsconfig
     )
@@ -55,8 +58,10 @@ export function packherdRequire(
   )
   logInfo({ projectBaseDir })
 
-  // Depending from where the require hook is applied, the parent process may not contain a
-  // cache and only use packherd to provide TypeScript transpile support.
+  // Even though packherd is designed to support loading from these caches we
+  // also support using it for on the fly TypeScript transpilation only.
+  // In that case the necessary extensions hook was applied above and no
+  // further work is needed.
   if (exportKeysLen === 0 && definitionKeysLen === 0) {
     logInfo(
       'No moduleExports nor moduleDefinitions provided, not hooking Module._load'
@@ -144,7 +149,10 @@ export function packherdRequire(
 
       return exports
     } catch (err) {
-      debugger
+      logError(err)
+      if (diagnostics) {
+        debugger
+      }
     }
   }
 }

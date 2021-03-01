@@ -51,6 +51,7 @@ export function hookTranspileTs(
   Module: EnhancedModule,
   projectBaseDir: string,
   log: Debugger,
+  diagnostics: boolean,
   initCompileCache?: InitTranspileCache,
   tsconfig?: TransformOptions['tsconfigRaw']
 ) {
@@ -63,18 +64,17 @@ export function hookTranspileTs(
   Module._extensions['.ts'] = function (mod: EnhancedModule, filename: string) {
     const origCompile = mod._compile
 
-    // NOTE: I verified that bypassing the laoder to avoid reading `code` that goes unused in case
-    // the transpiled version is alreay in the cache does not make a notable difference.
-    // Also if we do that naívely we loose the cache checks that Node.js does for us when using the
-    // default loader.
+    // NOTE: I benchmarked that bypassing the laoder to avoid reading `code`
+    // that goes unused in case the transpiled version is already in the cache.
+    // That optimiziation does not make a notable difference and thus we opt of
+    // the more robust approach of using the Node.js builtin compile which also
+    // provides internal Node.js cache checks.
     mod._compile = (code: string) => {
       mod._compile = origCompile
       try {
         log('transpiling %s', path.relative(projectBaseDir, filename))
 
-        // console.time(`ts:transpile ${filename}`)
         const transpiled = transpileTsCode(filename, code, tsconfig, cache)
-        // console.timeEnd(`ts:transpile ${filename}`)
 
         const compiled: NodeModule = mod._compile(
           transpiled,
@@ -82,7 +82,9 @@ export function hookTranspileTs(
         ) as NodeModule
         return compiled
       } catch (err) {
-        debugger
+        if (diagnostics) {
+          debugger
+        }
         return mod._compile(code, filename)
       }
     }

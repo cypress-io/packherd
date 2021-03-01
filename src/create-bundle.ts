@@ -14,8 +14,9 @@ export function createBundle(
     bundle: true,
     write: false,
   }) as BuildOptions & { write: false }
-  // TODO(thlorenz): this is horrible, but esbuild throws if it encounters an unknown opt
+  // This is not ideal, but esbuild throws if it encounters an unknown opt
   // @ts-ignore
   delete opts.entryFilePath
+
   return build(opts)
 }

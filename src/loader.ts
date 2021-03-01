@@ -173,8 +173,7 @@ export class PackherdModuleLoader {
     }
 
     // 3. If none of the above worked fall back to Node.js
-    let exports
-    exports = this.origLoad(fullPath, parent, isMain)
+    const exports = this.origLoad(fullPath, parent, isMain)
     this.misses++
     this._dumpInfo()
     this.benchmark.timeEnd(fullPath, 'Module._load', this.loading.stack())

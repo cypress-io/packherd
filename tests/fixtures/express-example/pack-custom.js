@@ -37,7 +37,6 @@ const basedir = __dirname
 const bundlerPath = process.env.BUNDLER
 
 function outfileText(outfile) {
-  // TODO(thlorenz): is this the best option to send this?
   // Our esbuild snapshot version sets the `contents` property to a hex string which is
   // different than what esbuild does as it sends a Uint8Array over the wire.
   return Buffer.from(outfile.contents, 'hex').toString('utf8')

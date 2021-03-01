@@ -119,7 +119,7 @@ class ActiveBenchmark {
 }
 
 /**
- * Depending on the provided outputPath being defined or not, it xets up
+ * Depending on the provided outputPath being defined or not, it sets up
  * an inactive benchmark which does nothing or an active one which
  * collects and writes out data.
  */
