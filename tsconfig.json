@@ -10,7 +10,7 @@
     "noEmit": false,
     "preserveWatchOutput": true,
     "emitDeclarationOnly": false,
-    "importHelpers": true,
+    "importHelpers": false,
     "strict": true,
     "noUnusedLocals": true,
     "noFallthroughCasesInSwitch": true,
