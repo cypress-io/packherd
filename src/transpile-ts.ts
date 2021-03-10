@@ -82,6 +82,7 @@ export function hookTranspileTs(
         ) as NodeModule
         return compiled
       } catch (err) {
+        console.error(err)
         if (diagnostics) {
           debugger
         }
