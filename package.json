@@ -8,7 +8,7 @@
     "process-benchmark": "./dist/scripts/process-benchmark.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p ./tsconfig.json",
     "test-only": "(cd tests/fixtures/minimal && yarn) && tape ./dist/tests/*.js && node ./dist/tests/circular/test.js",
     "test": "yarn build && yarn test-only",
     "lint": "prettier -c ./src/",
