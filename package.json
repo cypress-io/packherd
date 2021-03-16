@@ -8,6 +8,7 @@
     "process-benchmark": "./dist/scripts/process-benchmark.js"
   },
   "scripts": {
+    "prepublish": "yarn build",
     "build": "tsc -p ./tsconfig.json",
     "test-only": "(cd tests/fixtures/minimal && yarn) && tape ./dist/tests/*.js && node ./dist/tests/circular/test.js",
     "test": "yarn build && yarn test-only",
@@ -22,6 +23,10 @@
   "directories": {
     "dist": "./dist/src"
   },
+  "files": [
+    "dist/scripts/*",
+    "dist/src/*"
+  ],
   "dependencies": {
     "debug": "^4.3.1",
     "depstats": "^0.2.0",
