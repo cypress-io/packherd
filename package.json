@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Herds all dependencies reachable from an entry and packs them.",
   "main": "dist/src/packherd.js",
-  "types": "src/packherd.ts",
+  "types": "dist/src/packherd.d.ts",
   "bin": {
     "process-benchmark": "./dist/scripts/process-benchmark.js"
   },
