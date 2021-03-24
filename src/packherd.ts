@@ -38,9 +38,14 @@ export async function packherd(opts: PackherdOpts) {
     },
   })
   assert(outputFiles.length >= 2, 'expecting at least two outfiles')
+  const [bundleFile, metaFile] = outputFiles
+
+  assert(bundleFile.contents != null, 'bundle output should include contents')
+  assert(metaFile.text != null, 'meta output should include text')
+
   return {
-    bundle: outputFiles[0].text,
-    meta: JSON.parse(outputFiles[1].text),
+    bundle: bundleFile.contents,
+    meta: JSON.parse(metaFile.text),
     warnings,
   }
 }

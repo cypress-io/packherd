@@ -29,7 +29,7 @@ exports['./node_modules/tmpfile/index.js'] = require('./node_modules/tmpfile/ind
 
 test('generate minimal: custom create bundle', async (t) => {
   const bundle: CreateBundleOutputFile = {
-    text: '// Unused bundle content',
+    contents: Buffer.from('// Unused bundle content', 'utf8'),
   }
   const metadata: Metadata = ({
     inputs: {

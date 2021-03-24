@@ -14,5 +14,6 @@ export async function getMetadata(
     outbase,
   })
   assert(outputFiles.length >= 2, 'expecting at least two outfiles')
+  assert(outputFiles[1].text != null, 'meta should include text')
   return JSON.parse(outputFiles[1].text)
 }

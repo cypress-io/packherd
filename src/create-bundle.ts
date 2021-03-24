@@ -18,5 +18,6 @@ export function createBundle(
   // @ts-ignore
   delete opts.entryFilePath
 
-  return build(opts)
+  // NOTE: we just changed Output file to either have text: string or contents: UInt8Array, never both
+  return (build(opts) as unknown) as Promise<CreateBundleResult>
 }

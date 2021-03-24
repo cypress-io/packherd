@@ -42,7 +42,7 @@ test('packherd minimal: resolves paths relative to entry and creates entry conte
 
 test('packherd minimal: custom create bundle', async (t) => {
   const bundleStub: CreateBundleOutputFile = {
-    text: '// Unused bundle content',
+    contents: Buffer.from('// Unused bundle content', 'utf8'),
   }
   const metadata: Metadata = ({
     inputs: {
@@ -65,6 +65,6 @@ test('packherd minimal: custom create bundle', async (t) => {
   const { meta, bundle } = await packherd({ entryFile, createBundle })
 
   spok(t, meta, metadata)
-  t.equal(bundle, bundleStub.text)
+  t.equal(bundle, bundleStub.contents)
   t.end()
 })

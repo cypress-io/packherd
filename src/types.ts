@@ -55,7 +55,16 @@ export type CreateBundleOpts = BuildOptions & {
   entryFilePath: string
 }
 
-export type CreateBundleOutputFile = Pick<OutputFile, 'text'>
+export type CreateBundleOutputFile =
+  | {
+      contents?: undefined
+      text: OutputFile['text']
+    }
+  | {
+      contents: OutputFile['contents']
+      text?: undefined
+    }
+
 export type CreateBundleResult = {
   warnings: BuildResult['warnings']
   outputFiles: CreateBundleOutputFile[]
