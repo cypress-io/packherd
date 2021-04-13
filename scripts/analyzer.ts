@@ -1,6 +1,6 @@
 import { strict as assert } from 'assert'
 import { depStats, modulePackageInfo, PackageInfo } from 'depstats'
-import { Metadata } from 'esbuild'
+import { Metafile } from 'esbuild'
 import path from 'path'
 import { LoadInfo } from '../src/benchmark'
 import { byDurationReversed, threeDecimals } from './utils'
@@ -18,7 +18,7 @@ export class Analyzer {
 
   constructor(
     allSorted: [key: string, val: LoadInfo][],
-    readonly metaData: Metadata & { projectBaseDir: string }
+    readonly metaData: Metafile & { projectBaseDir: string }
   ) {
     this.all = new Map(allSorted)
   }

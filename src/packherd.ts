@@ -25,11 +25,11 @@ export async function packherd(opts: PackherdOpts) {
   )
 
   const { entry } = await entryGenerator.createEntryScript()
-  const { outfile, metafile } = tmpFilePaths()
+  const { outfile } = tmpFilePaths()
 
-  const { outputFiles, warnings } = await createBundle({
+  const { outputFiles, metafile, warnings } = await createBundle({
     outdir: path.dirname(outfile),
-    metafile,
+    metafile: true,
     entryFilePath: opts.entryFile,
     stdin: {
       contents: entry,
@@ -37,15 +37,25 @@ export async function packherd(opts: PackherdOpts) {
       resolveDir: path.dirname(opts.entryFile),
     },
   })
-  assert(outputFiles.length >= 2, 'expecting at least two outfiles')
-  const [bundleFile, metaFile] = outputFiles
+  assert(metafile != null, 'createBundle should return metafile')
+
+  // When using the `stdin` option esbuild sends the same outputFile twice, as
+  // .../stdin.js and .../entry.js
+  assert(
+    outputFiles.length === 1 || outputFiles.length === 2,
+    `expecting exactly one or two outputFiles, got ${outputFiles.length} instead`
+  )
+  const [bundleFile] = outputFiles
 
   assert(bundleFile.contents != null, 'bundle output should include contents')
-  assert(metaFile.text != null, 'meta output should include text')
+
+  const bundle = Buffer.isBuffer(bundleFile.contents)
+    ? bundleFile.contents
+    : Buffer.from(bundleFile.contents)
 
   return {
-    bundle: bundleFile.contents,
-    meta: JSON.parse(metaFile.text),
+    bundle,
+    meta: metafile,
     warnings,
   }
 }

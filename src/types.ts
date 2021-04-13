@@ -1,6 +1,7 @@
 import {
   BuildOptions,
   BuildResult,
+  Metafile,
   OutputFile,
   TransformOptions,
 } from 'esbuild'
@@ -55,19 +56,14 @@ export type CreateBundleOpts = BuildOptions & {
   entryFilePath: string
 }
 
-export type CreateBundleOutputFile =
-  | {
-      contents?: undefined
-      text: OutputFile['text']
-    }
-  | {
-      contents: OutputFile['contents']
-      text?: undefined
-    }
+export type CreateBundleOutputFile = {
+  contents: OutputFile['contents']
+}
 
 export type CreateBundleResult = {
   warnings: BuildResult['warnings']
   outputFiles: CreateBundleOutputFile[]
+  metafile: Metafile
 }
 
 export type CreateBundle = (

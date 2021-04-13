@@ -1,4 +1,4 @@
-import { Metadata } from 'esbuild'
+import { Metafile } from 'esbuild'
 import test from 'tape'
 import { createBundle } from '../src/create-bundle'
 import {
@@ -31,19 +31,19 @@ test('generate minimal: custom create bundle', async (t) => {
   const bundle: CreateBundleOutputFile = {
     contents: Buffer.from('// Unused bundle content', 'utf8'),
   }
-  const metadata: Metadata = ({
+  const metafile: Metafile = ({
     inputs: {
       'tests/fixtures/minimal/node_modules/foo/foo.js': {},
       'tests/fixtures/minimal/lib/bar.js': {},
       'tests/fixtures/minimal/node_modules/baz/baz.js': {},
     },
-  } as unknown) as Metadata
-  const meta: CreateBundleOutputFile = { text: JSON.stringify(metadata) }
+  } as unknown) as Metafile
 
   const createBundle: CreateBundle = (_opts: CreateBundleOpts) => {
     const result: CreateBundleResult = {
       warnings: [],
-      outputFiles: [bundle, meta],
+      outputFiles: [bundle],
+      metafile,
     }
     return Promise.resolve(result)
   }

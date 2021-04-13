@@ -28,7 +28,6 @@ export function tmpFilePaths() {
   ensureDirSync(bundleTmpDir)
 
   const outfile = path.join(bundleTmpDir, 'bundle.js')
-  const metafile = path.join(bundleTmpDir, 'meta.json')
 
-  return { outfile, metafile }
+  return { outfile }
 }

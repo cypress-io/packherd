@@ -1,6 +1,6 @@
 import path from 'path'
 
-import { Metadata } from 'esbuild'
+import { Metafile } from 'esbuild'
 import { CreateBundle } from './types'
 import { getMetadata } from './get-metadata'
 
@@ -34,11 +34,11 @@ export class EntryGenerator {
     return { paths, entry }
   }
 
-  private async _getMetadata(): Promise<Metadata> {
+  private _getMetadata(): Promise<Metafile> {
     return getMetadata(this.createBundle, this.entryFile, this.entryDirectory)
   }
 
-  private _resolveRelativePaths(meta: Metadata) {
+  private _resolveRelativePaths(meta: Metafile) {
     let relPaths = Object.keys(meta.inputs).filter((x) => !x.includes(packherd))
 
     if (this.nodeModulesOnly) {
