@@ -1,6 +1,6 @@
 {
   "name": "packherd",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Herds all dependencies reachable from an entry and packs them.",
   "main": "dist/src/packherd.js",
   "types": "dist/src/packherd.d.ts",
