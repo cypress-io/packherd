@@ -63,7 +63,7 @@ export type CreateBundleOutputFile = {
 export type CreateBundleResult = {
   warnings: BuildResult['warnings']
   outputFiles: CreateBundleOutputFile[]
-  metafile: Metafile
+  metafile?: Metafile
 }
 
 export type CreateBundle = (
