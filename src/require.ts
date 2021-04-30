@@ -150,7 +150,7 @@ export function packherdRequire(
       return exports
     } catch (err) {
       logError(err)
-      if (diagnostics) {
+      if (diagnostics && !moduleUri.endsWith('hook-require')) {
         debugger
       }
     }
