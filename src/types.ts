@@ -76,9 +76,13 @@ export interface TranspileCache {
   add(origFullPath: string, convertedContent: string): void
   clearSync(): void
 }
+export type TranspileCacheOpts = {
+  cacheDir: string
+  keepInMemoryCache: boolean
+}
 export type InitTranspileCache = (
   projectBasedir: string,
-  cacheDir?: string
+  opts?: Partial<TranspileCacheOpts>
 ) => TranspileCache | undefined
 
 export type PackherdTranspileOpts = {

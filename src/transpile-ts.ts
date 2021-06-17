@@ -3,6 +3,7 @@ import { TransformOptions, transformSync } from 'esbuild'
 import type { TranspileCache, InitTranspileCache } from './types'
 import fs from 'fs'
 import path from 'path'
+import { installSourcemapSupport } from './sourcemap-support'
 
 type EnhancedModule = NodeModule & {
   _extensions: Record<string, (mod: EnhancedModule, filename: string) => void>
@@ -14,6 +15,8 @@ const DEFAULT_TRANSFORM_OPTS: TransformOptions = {
   target: ['node14.5'],
   loader: 'ts',
   format: 'cjs',
+  sourcemap: 'inline',
+  minify: false,
 }
 
 export function transpileTs(
@@ -34,11 +37,16 @@ export function transpileTsCode(
   tsconfig?: TransformOptions['tsconfigRaw'],
   cache?: TranspileCache
 ): string {
+  if (cache != null) {
+    installSourcemapSupport(cache)
+  }
+
   const cached = (cache != null && cache.get(fullModuleUri)) || null
   if (cached != null) return cached
 
   const opts = Object.assign({}, DEFAULT_TRANSFORM_OPTS, {
     tsconfigRaw: tsconfig,
+    sourcefile: fullModuleUri,
   })
   const result = transformSync(ts, opts)
   if (cache != null) {
@@ -58,7 +66,15 @@ export function hookTranspileTs(
   const cache =
     initCompileCache == null
       ? undefined
-      : initCompileCache(projectBaseDir, '/tmp/cypress-cache')
+      : initCompileCache(projectBaseDir, { cacheDir: '/tmp/packherd-cache' })
+
+  // If there is no cache we wouldn't know where to store the transpiled JavaScript and thus
+  // would have to transpile again just to generate sourcemaps.
+  // In general we expect that during development when sourcemaps are desired for on
+  // the fly transpiled code, then a cache is used as well.
+  if (cache != null) {
+    installSourcemapSupport(cache)
+  }
 
   const defaultLoader = Module._extensions['.js']
   Module._extensions['.ts'] = function (mod: EnhancedModule, filename: string) {
