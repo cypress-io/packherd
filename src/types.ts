@@ -71,7 +71,8 @@ export type CreateBundle = (
 ) => Promise<CreateBundleResult>
 
 export interface TranspileCache {
-  get(fullPath: string): string | undefined
+  get(fullPath: string, skipStaleCheck?: boolean): string | undefined
+  addAsync(origFullPath: string, convertedContent: string): Promise<void>
   add(origFullPath: string, convertedContent: string): void
   clearSync(): void
 }
