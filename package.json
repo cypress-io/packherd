@@ -28,13 +28,16 @@
     "dist/src/*"
   ],
   "dependencies": {
+    "convert-source-map": "^1.7.0",
     "debug": "^4.3.1",
     "depstats": "^0.2.0",
     "esbuild": "^0.12.8",
     "performance-now": "^2.1.0",
+    "source-map-js": "^0.6.2",
     "supports-color": "^8.1.1"
   },
   "devDependencies": {
+    "@types/convert-source-map": "^1.5.1",
     "@types/debug": "^4.1.5",
     "@types/node": "^14.14.20",
     "@types/tape": "^4.13.0",
