@@ -27,7 +27,12 @@ export async function packherd(opts: PackherdOpts) {
   const { entry } = await entryGenerator.createEntryScript()
   const { outfile } = tmpFilePaths()
 
-  const { outputFiles, metafile, warnings } = await createBundle({
+  const {
+    outputFiles,
+    metafile,
+    sourceMap: sourceMapFile,
+    warnings,
+  } = await createBundle({
     outdir: path.dirname(outfile),
     metafile: true,
     entryFilePath: opts.entryFile,
@@ -53,8 +58,16 @@ export async function packherd(opts: PackherdOpts) {
     ? bundleFile.contents
     : Buffer.from(bundleFile.contents)
 
+  const sourceMap =
+    sourceMapFile == null
+      ? undefined
+      : Buffer.isBuffer(sourceMapFile?.contents)
+      ? sourceMapFile.contents
+      : Buffer.from(sourceMapFile.contents)
+
   return {
     bundle,
+    sourceMap,
     meta: metafile,
     warnings,
   }

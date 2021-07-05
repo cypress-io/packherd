@@ -1,7 +1,9 @@
 import debug from 'debug'
 import { Benchmark, setupBenchmark } from './benchmark'
+import { DefaultTranspileCache } from './default-transpile-cache'
 import { ModuleLoaderOpts, PackherdModuleLoader } from './loader'
-import type { PackherdTranspileOpts } from './types'
+import { installSourcemapSupport } from './sourcemap-support'
+import type { PackherdTranspileOpts, SourceMapLookup } from './types'
 
 const logInfo = debug('packherd:info')
 const logDebug = debug('packherd:debug')
@@ -12,6 +14,7 @@ export * from './loader'
 export type PackherdRequireOpts = ModuleLoaderOpts & {
   requireStatsFile?: string
   transpileOpts?: Partial<PackherdTranspileOpts>
+  sourceMapLookup?: SourceMapLookup
 }
 
 const DEFAULT_TRANSPILE_OPTS = {
@@ -31,18 +34,29 @@ export function packherdRequire(
   )
   const diagnostics = opts.diagnostics ?? false
 
+  const cache =
+    initTranspileCache == null
+      ? new DefaultTranspileCache()
+      : initTranspileCache(projectBaseDir, {
+          cacheDir: '/tmp/packherd-cache',
+        }) ?? new DefaultTranspileCache()
+
   if (supportTS) {
     logInfo('Enabling TS support')
     logDebug({ supportTS, initTranspileCache, tsconfig })
     const { hookTranspileTs } = require('./transpile-ts')
+
     hookTranspileTs(
       Module,
       projectBaseDir,
       logInfo,
       diagnostics,
-      initTranspileCache,
+      cache,
+      opts.sourceMapLookup,
       tsconfig
     )
+  } else {
+    installSourcemapSupport(cache, opts.sourceMapLookup)
   }
 
   const exportKeysLen =

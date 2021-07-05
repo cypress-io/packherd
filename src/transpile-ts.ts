@@ -1,6 +1,6 @@
 import type { Debugger } from 'debug'
 import { TransformOptions, transformSync } from 'esbuild'
-import type { TranspileCache, InitTranspileCache } from './types'
+import type { TranspileCache, SourceMapLookup } from './types'
 import fs from 'fs'
 import path from 'path'
 import { installSourcemapSupport } from './sourcemap-support'
@@ -21,25 +21,26 @@ const DEFAULT_TRANSFORM_OPTS: TransformOptions = {
 
 export function transpileTs(
   fullModuleUri: string,
-  tsconfig?: TransformOptions['tsconfigRaw'],
-  cache?: TranspileCache
+  cache: TranspileCache,
+  sourceMapLookup?: SourceMapLookup,
+  tsconfig?: TransformOptions['tsconfigRaw']
 ): string {
   const cached = (cache != null && cache.get(fullModuleUri)) || null
   if (cached != null) return cached
 
   const ts = fs.readFileSync(fullModuleUri, 'utf8')
-  return transpileTsCode(fullModuleUri, ts, tsconfig, cache)
+  return transpileTsCode(fullModuleUri, ts, cache, sourceMapLookup, tsconfig)
 }
 
 export function transpileTsCode(
   fullModuleUri: string,
   ts: string,
-  tsconfig?: TransformOptions['tsconfigRaw'],
-  cache?: TranspileCache
+  cache: TranspileCache,
+  sourceMapLookup?: SourceMapLookup,
+  // TODO: consider 'error' for importsNotUsedAsValues (maybe) to add some type checking
+  tsconfig?: TransformOptions['tsconfigRaw']
 ): string {
-  if (cache != null) {
-    installSourcemapSupport(cache)
-  }
+  installSourcemapSupport(cache, sourceMapLookup)
 
   const cached = (cache != null && cache.get(fullModuleUri)) || null
   if (cached != null) return cached
@@ -60,21 +61,11 @@ export function hookTranspileTs(
   projectBaseDir: string,
   log: Debugger,
   diagnostics: boolean,
-  initCompileCache?: InitTranspileCache,
+  cache: TranspileCache,
+  sourceMapLookup?: SourceMapLookup,
   tsconfig?: TransformOptions['tsconfigRaw']
 ) {
-  const cache =
-    initCompileCache == null
-      ? undefined
-      : initCompileCache(projectBaseDir, { cacheDir: '/tmp/packherd-cache' })
-
-  // If there is no cache we wouldn't know where to store the transpiled JavaScript and thus
-  // would have to transpile again just to generate sourcemaps.
-  // In general we expect that during development when sourcemaps are desired for on
-  // the fly transpiled code, then a cache is used as well.
-  if (cache != null) {
-    installSourcemapSupport(cache)
-  }
+  installSourcemapSupport(cache, sourceMapLookup)
 
   const defaultLoader = Module._extensions['.js']
   Module._extensions['.ts'] = function (mod: EnhancedModule, filename: string) {
@@ -90,7 +81,13 @@ export function hookTranspileTs(
       try {
         log('transpiling %s', path.relative(projectBaseDir, filename))
 
-        const transpiled = transpileTsCode(filename, code, tsconfig, cache)
+        const transpiled = transpileTsCode(
+          filename,
+          code,
+          cache,
+          sourceMapLookup,
+          tsconfig
+        )
 
         const compiled: NodeModule = mod._compile(
           transpiled,

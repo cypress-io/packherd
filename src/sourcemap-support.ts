@@ -1,7 +1,7 @@
 import debug from 'debug'
 import path from 'path'
 import { MappedPosition, RawSourceMap, SourceMapConsumer } from 'source-map-js'
-import { TranspileCache } from './types'
+import { SourceMapLookup, TranspileCache } from './types'
 import convertSourceMap from 'convert-source-map'
 
 const logError = debug('packherd:error')
@@ -42,9 +42,23 @@ let sourcemapSupport: SourcemapSupport | undefined
 // -----------------
 // Install
 // -----------------
-export function installSourcemapSupport(cache: TranspileCache) {
-  if (sourcemapSupport?.prepareStackTrace === Error.prepareStackTrace) return
-  sourcemapSupport = new SourcemapSupport(cache)
+/**
+ * Creates an instance to map Stack traces via discovered source maps
+ *
+ * @param cache used to look up script content from which to extract source maps
+ * @param sourceMapLookup: when provided is queried for source maps for a particular URI first
+ */
+export function installSourcemapSupport(
+  cache: TranspileCache,
+  sourceMapLookup?: SourceMapLookup
+) {
+  if (
+    sourcemapSupport != null &&
+    Error.prepareStackTrace === sourcemapSupport.prepareStackTrace
+  )
+    return
+
+  sourcemapSupport = new SourcemapSupport(cache, sourceMapLookup)
   Error.prepareStackTrace = sourcemapSupport.prepareStackTrace
 }
 
@@ -53,7 +67,10 @@ export function installSourcemapSupport(cache: TranspileCache) {
 // -----------------
 class SourcemapSupport {
   private readonly _sourcemapCache: Map<FullScriptPath, UrlAndMap> = new Map()
-  constructor(private readonly _cache: TranspileCache) {}
+  constructor(
+    private readonly _cache: TranspileCache,
+    private readonly _sourceMapLookup?: SourceMapLookup
+  ) {}
 
   // This function is part of the V8 stack trace API, for more info see:
   // https://v8.dev/docs/stack-trace-api
@@ -156,15 +173,34 @@ class SourcemapSupport {
   }
 
   retrieveSourceMap(script: FullScriptPath) {
-    // Only supporting our own TypeScript modules for now
-    if (path.extname(script) !== '.ts') return EMPTY_URL_AND_MAP
-
-    logTrace('retrieving sourcemap for  %s', script)
+    // 1. Try to load previosuly cached source map
     const fromMemory = this._sourcemapCache.get(script)
     if (fromMemory != null) {
       logTrace('from memory sourcemap for  %s', script)
       return fromMemory
     }
+
+    // 2. Try to look it up via externally provided function
+    if (this._sourceMapLookup != null) {
+      const map = this._sourceMapLookup(script)
+      try {
+        if (map != null) {
+          const urlAndMap = { url: script, map: new SourceMapConsumer(map) }
+          this._sourcemapCache.set(script, urlAndMap)
+          logTrace('Retrieved sourcemap for %s from sourcemap lookup', script)
+          return urlAndMap
+        }
+      } catch (err) {
+        logError('Looked up invalid source map %s', script)
+        logError(err)
+        return EMPTY_URL_AND_MAP
+      }
+    }
+
+    // 3. Try to parse a source map out of the script
+    // Only supporting our own TypeScript modules for now
+    if (path.extname(script) !== '.ts') return EMPTY_URL_AND_MAP
+    logTrace('retrieving sourcemap for  %s', script)
 
     return this.mapFromInlined(script)
   }

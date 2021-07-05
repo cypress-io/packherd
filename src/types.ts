@@ -6,6 +6,8 @@ import {
   TransformOptions,
 } from 'esbuild'
 
+import type { RawSourceMap } from 'source-map-js'
+
 type NodeRequireFunction = (id: string) => any
 
 export type ModuleDefinition = (
@@ -60,9 +62,14 @@ export type CreateBundleOutputFile = {
   contents: OutputFile['contents']
 }
 
+export type CreateBundleSourcemap = {
+  contents: OutputFile['contents']
+}
+
 export type CreateBundleResult = {
   warnings: BuildResult['warnings']
   outputFiles: CreateBundleOutputFile[]
+  sourceMap?: CreateBundleSourcemap
   metafile?: Metafile
 }
 
@@ -90,3 +97,5 @@ export type PackherdTranspileOpts = {
   supportTS?: boolean
   initTranspileCache?: InitTranspileCache
 }
+
+export type SourceMapLookup = (uri: string) => RawSourceMap | undefined
