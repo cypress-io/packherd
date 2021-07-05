@@ -22,6 +22,7 @@ const DEFAULT_TRANSFORM_OPTS: TransformOptions = {
 export function transpileTs(
   fullModuleUri: string,
   cache: TranspileCache,
+  projectBaseDir: string,
   sourceMapLookup?: SourceMapLookup,
   tsconfig?: TransformOptions['tsconfigRaw']
 ): string {
@@ -29,18 +30,26 @@ export function transpileTs(
   if (cached != null) return cached
 
   const ts = fs.readFileSync(fullModuleUri, 'utf8')
-  return transpileTsCode(fullModuleUri, ts, cache, sourceMapLookup, tsconfig)
+  return transpileTsCode(
+    fullModuleUri,
+    ts,
+    cache,
+    projectBaseDir,
+    sourceMapLookup,
+    tsconfig
+  )
 }
 
 export function transpileTsCode(
   fullModuleUri: string,
   ts: string,
   cache: TranspileCache,
+  projectBaseDir: string,
   sourceMapLookup?: SourceMapLookup,
   // TODO: consider 'error' for importsNotUsedAsValues (maybe) to add some type checking
   tsconfig?: TransformOptions['tsconfigRaw']
 ): string {
-  installSourcemapSupport(cache, sourceMapLookup)
+  installSourcemapSupport(cache, projectBaseDir, sourceMapLookup)
 
   const cached = (cache != null && cache.get(fullModuleUri)) || null
   if (cached != null) return cached
@@ -65,7 +74,7 @@ export function hookTranspileTs(
   sourceMapLookup?: SourceMapLookup,
   tsconfig?: TransformOptions['tsconfigRaw']
 ) {
-  installSourcemapSupport(cache, sourceMapLookup)
+  installSourcemapSupport(cache, projectBaseDir, sourceMapLookup)
 
   const defaultLoader = Module._extensions['.js']
   Module._extensions['.ts'] = function (mod: EnhancedModule, filename: string) {
@@ -85,6 +94,7 @@ export function hookTranspileTs(
           filename,
           code,
           cache,
+          projectBaseDir,
           sourceMapLookup,
           tsconfig
         )

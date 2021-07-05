@@ -56,7 +56,7 @@ export function packherdRequire(
       tsconfig
     )
   } else {
-    installSourcemapSupport(cache, opts.sourceMapLookup)
+    installSourcemapSupport(cache, projectBaseDir, opts.sourceMapLookup)
   }
 
   const exportKeysLen =

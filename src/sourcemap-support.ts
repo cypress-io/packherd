@@ -50,6 +50,7 @@ let sourcemapSupport: SourcemapSupport | undefined
  */
 export function installSourcemapSupport(
   cache: TranspileCache,
+  projectBaseDir: string,
   sourceMapLookup?: SourceMapLookup
 ) {
   if (
@@ -58,7 +59,11 @@ export function installSourcemapSupport(
   )
     return
 
-  sourcemapSupport = new SourcemapSupport(cache, sourceMapLookup)
+  sourcemapSupport = new SourcemapSupport(
+    cache,
+    projectBaseDir,
+    sourceMapLookup
+  )
   Error.prepareStackTrace = sourcemapSupport.prepareStackTrace
 }
 
@@ -69,6 +74,7 @@ class SourcemapSupport {
   private readonly _sourcemapCache: Map<FullScriptPath, UrlAndMap> = new Map()
   constructor(
     private readonly _cache: TranspileCache,
+    private readonly _projectBaseDir: string,
     private readonly _sourceMapLookup?: SourceMapLookup
   ) {}
 
@@ -141,7 +147,10 @@ class SourcemapSupport {
     if (typeof sourceMap?.map?.originalPositionFor === 'function') {
       const origPos = sourceMap.map.originalPositionFor(pos)
 
-      if (origPos.source != null) return origPos
+      if (origPos.source != null) {
+        origPos.source = this._ensureFullPath(origPos.source)
+        return origPos
+      }
     }
     // return generated position if we couldn't find the original
     const { line, column, script } = pos
@@ -176,7 +185,7 @@ class SourcemapSupport {
     // 1. Try to load previosuly cached source map
     const fromMemory = this._sourcemapCache.get(script)
     if (fromMemory != null) {
-      logTrace('from memory sourcemap for  %s', script)
+      logTrace('from memory sourcemap for "%s"', script)
       return fromMemory
     }
 
@@ -187,11 +196,11 @@ class SourcemapSupport {
         if (map != null) {
           const urlAndMap = { url: script, map: new SourceMapConsumer(map) }
           this._sourcemapCache.set(script, urlAndMap)
-          logTrace('Retrieved sourcemap for %s from sourcemap lookup', script)
+          logTrace('Retrieved sourcemap for "%s" from sourcemap lookup', script)
           return urlAndMap
         }
       } catch (err) {
-        logError('Looked up invalid source map %s', script)
+        logError('Looked up invalid source map "%s"', script)
         logError(err)
         return EMPTY_URL_AND_MAP
       }
@@ -203,6 +212,10 @@ class SourcemapSupport {
     logTrace('retrieving sourcemap for  %s', script)
 
     return this.mapFromInlined(script)
+  }
+
+  _ensureFullPath(p: string) {
+    return path.isAbsolute(p) ? p : path.join(this._projectBaseDir, p)
   }
 }
 
