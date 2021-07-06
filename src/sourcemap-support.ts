@@ -7,6 +7,11 @@ import convertSourceMap from 'convert-source-map'
 const logError = debug('packherd:error')
 const logTrace = debug('packherd:trace')
 
+const INCLUDE_CODE_BEFORE = 2
+const INCLUDE_CODE_AFTER = 2
+const CODE_FRAME_LINE_GUTTER_WIDTH = 4
+const INCLUDE_CODE_FRAMES = process.env.PACKHERD_CODE_FRAMES != null
+
 // -----------------
 // types
 // -----------------
@@ -23,7 +28,13 @@ type SourcePosition = {
 type UrlAndMap = { url: string | null; map: SourceMapConsumer | null }
 const EMPTY_URL_AND_MAP = { url: null, map: null }
 
-type CallSite = NodeJS.CallSite & { [index: string]: Function }
+type CallSite = NodeJS.CallSite & {
+  [index: string]: Function
+} & {
+  codeFrames: string[]
+}
+
+type MappedPositionWithCodeFrames = MappedPosition & { codeFrames: string[] }
 
 // -----------------
 // Config
@@ -46,6 +57,7 @@ let sourcemapSupport: SourcemapSupport | undefined
  * Creates an instance to map Stack traces via discovered source maps
  *
  * @param cache used to look up script content from which to extract source maps
+ * @param projectBaseDir directory that is the root of relative source map sources
  * @param sourceMapLookup: when provided is queried for source maps for a particular URI first
  */
 export function installSourcemapSupport(
@@ -88,17 +100,32 @@ class SourcemapSupport {
     const state: StackPosition = {}
 
     const processedStack = []
+    let includeCodeFrames = INCLUDE_CODE_FRAMES
     for (let i = stack.length - 1; i >= 0; i--) {
-      processedStack.push(
-        '\n    at ' + this.wrapCallSite(stack[i] as CallSite, state)
+      const c = this.wrapCallSite(
+        stack[i] as CallSite,
+        state,
+        includeCodeFrames
       )
+      if (includeCodeFrames) {
+        // Keep trying to include some code until we succeeded once
+        includeCodeFrames = c.codeFrames.length === 0
+      }
+      for (const codeFrame of c.codeFrames.reverse()) {
+        processedStack.push(`\n      ${codeFrame}`)
+      }
+      processedStack.push('\n    at ' + c)
       state.nextPos = state.curPos
     }
     state.curPos = state.nextPos = undefined
     return errorString + processedStack.reverse().join('')
   }
 
-  wrapCallSite(frame: CallSite, state: StackPosition): CallSite {
+  wrapCallSite(
+    frame: CallSite,
+    state: StackPosition,
+    includeCodeFrames: boolean
+  ): CallSite {
     const script = frame.getFileName()
     if (script != null) {
       const line = frame.getLineNumber()
@@ -111,7 +138,10 @@ class SourcemapSupport {
       // Special case which is impossible to map to anything
       if (line == null) return frame
 
-      const pos = this.mapSourcePosition({ script, line, column })
+      const pos = this.mapSourcePosition(
+        { script, line, column },
+        includeCodeFrames
+      )
       state.curPos = pos
       frame = cloneCallSite(frame)
 
@@ -135,21 +165,30 @@ class SourcemapSupport {
       frame.getScriptNameOrSourceURL = function getScriptNameOrSourceURL() {
         return pos.source
       }
+      frame.codeFrames = pos.codeFrames
       return frame
     }
 
     return frame
   }
 
-  mapSourcePosition(pos: SourcePosition): MappedPosition {
+  mapSourcePosition(
+    pos: SourcePosition,
+    includeCodeFrames: boolean
+  ): MappedPositionWithCodeFrames {
     const sourceMap = this.retrieveSourceMap(pos.script)
 
     if (typeof sourceMap?.map?.originalPositionFor === 'function') {
       const origPos = sourceMap.map.originalPositionFor(pos)
+      // Sourcemap lines are 0 based so we adjust them to be 1 based to print correct stack frames
+      origPos.line++
+      const codeFrames = includeCodeFrames
+        ? extractCodeFrames(sourceMap.map, origPos)
+        : []
 
       if (origPos.source != null) {
         origPos.source = this._ensureFullPath(origPos.source)
-        return origPos
+        return Object.assign(origPos, { codeFrames })
       }
     }
     // return generated position if we couldn't find the original
@@ -159,6 +198,7 @@ class SourcemapSupport {
       column,
       source: '',
       name: script,
+      codeFrames: [],
     }
   }
 
@@ -315,4 +355,42 @@ function CallSiteToString(this: CallSite) {
     line += ' (' + fileLocation + ')'
   }
   return line
+}
+
+function extractCodeFrames(
+  map: SourceMapConsumer,
+  pos: MappedPosition
+): string[] {
+  const sourceContent = map.sourceContentFor(pos.source, true)
+  if (sourceContent == null) return []
+
+  // We adjusted lines to be 1 based (see mapSourcePosition)
+  const lineno = pos.line - 1
+  const lines = sourceContent.split('\n')
+  const beforeStart = Math.max(0, lineno - INCLUDE_CODE_BEFORE)
+  const beforeEnd = Math.min(lines.length, lineno + 1)
+
+  const afterStart = Math.min(lines.length, beforeEnd)
+  const afterEnd = Math.min(lines.length, afterStart + INCLUDE_CODE_AFTER)
+
+  const framesBefore = lines.slice(beforeStart, beforeEnd).map((x, idx) => {
+    const lineGutter = (beforeStart + idx + 1)
+      .toString()
+      .padStart(CODE_FRAME_LINE_GUTTER_WIDTH)
+    return `${lineGutter}: ${x}`
+  })
+  if (pos.column >= 0) {
+    framesBefore.push(
+      ' '.repeat(CODE_FRAME_LINE_GUTTER_WIDTH + 1 + pos.column) + '^'
+    )
+  }
+
+  const framesAfter = lines.slice(afterStart, afterEnd).map((x, idx) => {
+    const lineGutter = (afterStart + idx + 1)
+      .toString()
+      .padStart(CODE_FRAME_LINE_GUTTER_WIDTH)
+    return `${lineGutter}: ${x}`
+  })
+
+  return framesBefore.concat(framesAfter)
 }
