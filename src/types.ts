@@ -6,7 +6,7 @@ import {
   TransformOptions,
 } from 'esbuild'
 
-import type { RawSourceMap } from 'source-map-js'
+import type { RawSourceMap, SourceMapConsumer } from 'source-map-js'
 
 type NodeRequireFunction = (id: string) => any
 
@@ -98,4 +98,13 @@ export type PackherdTranspileOpts = {
   initTranspileCache?: InitTranspileCache
 }
 
+// -----------------
+// SourcemapSupport
+// -----------------
 export type SourceMapLookup = (uri: string) => RawSourceMap | undefined
+export type UrlAndMap = { url: string | null; map: SourceMapConsumer | null }
+export type MapAndSourceContent = {
+  url: string
+  map: SourceMapConsumer
+  sourceContent: string
+}

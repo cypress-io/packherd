@@ -1,8 +1,14 @@
 import debug from 'debug'
 import path from 'path'
 import { MappedPosition, RawSourceMap, SourceMapConsumer } from 'source-map-js'
-import { SourceMapLookup, TranspileCache } from './types'
+import type {
+  MapAndSourceContent,
+  SourceMapLookup,
+  TranspileCache,
+  UrlAndMap,
+} from './types'
 import convertSourceMap from 'convert-source-map'
+import { DefaultTranspileCache } from './default-transpile-cache'
 
 const logError = debug('packherd:error')
 const logTrace = debug('packherd:trace')
@@ -25,7 +31,6 @@ type SourcePosition = {
   line: number
   column: number
 }
-type UrlAndMap = { url: string | null; map: SourceMapConsumer | null }
 const EMPTY_URL_AND_MAP = { url: null, map: null }
 
 type CallSite = NodeJS.CallSite & {
@@ -49,10 +54,65 @@ const noHeader = /^v(10\.1[6-9]|10\.[2-9][0-9]|10\.[0-9]{3,}|1[2-9]\d*|[2-9]\d|\
 const headerLength = noHeader.test(process.version) ? 0 : 62
 
 // -----------------
+// Expose uri to map + content mapping
+// -----------------
+/**
+ * Retrieves the sourcemap for the provided bundle uri via the sourcemap support instance.
+ *
+ * @param projectBaseDir the root of the project for which the bundled code was generated
+ * @param bundleUri the path of the generated bundle
+ * @param cache when provided will be used to look for sourcemaps from transpiled modules
+ * @param sourceMapLookup when provided will be queried to lookup sourcemaps
+ */
+export function getSourceMap(
+  projectBaseDir: string,
+  bundleUri: string,
+  cache: TranspileCache = new DefaultTranspileCache(),
+  sourceMapLookup?: SourceMapLookup
+): UrlAndMap {
+  const sourcemapSupport = SourcemapSupport.createSingletonInstance(
+    cache,
+    projectBaseDir,
+    sourceMapLookup
+  )
+  return sourcemapSupport.retrieveSourceMap(bundleUri)
+}
+
+/**
+ * Retrieves the sourcemap for the provided bundle uri via the sourcemap support instance
+ * and extracts the source of the specified @see fileUri when found.
+ *
+ * @param projectBaseDir the root of the project for which the bundled code was generated
+ * @param bundleUri the path of the generated bundle
+ * @param fileUri the path for the original file we want to extract the source content for
+ * @param cache when provided will be used to look for sourcemaps from transpiled modules
+ * @param sourceMapLookup when provided will be queried to lookup sourcemaps
+ */
+export function getSourceMapAndContent(
+  projectBaseDir: string,
+  bundleUri: string,
+  fileUri: string,
+  cache: TranspileCache = new DefaultTranspileCache(),
+  sourceMapLookup?: SourceMapLookup
+): MapAndSourceContent | undefined {
+  const { map, url } = getSourceMap(
+    projectBaseDir,
+    bundleUri,
+    cache,
+    sourceMapLookup
+  )
+  if (map == null || url == null) return undefined
+  const sourceContent = map.sourceContentFor(fileUri, true)
+  return { map, url, sourceContent }
+}
+
+// -----------------
 // Install
 // -----------------
 /**
- * Creates an instance to map Stack traces via discovered source maps
+ * Creates an instance of @see SourcemapSupport and installs a hook for
+ * @see Error.prepareStackTrace in order to map stack traces using the source maps
+ * it discovers.
  *
  * @param cache used to look up script content from which to extract source maps
  * @param projectBaseDir directory that is the root of relative source map sources

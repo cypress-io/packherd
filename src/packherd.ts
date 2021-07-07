@@ -7,6 +7,7 @@ import { CreateBundle } from './types'
 
 export { packherdRequire, PackherdRequireOpts, GetModuleKey } from './require'
 export * from './types'
+export { getSourceMap, getSourceMapAndContent } from './sourcemap-support'
 
 export type PackherdOpts = {
   entryFile: string
