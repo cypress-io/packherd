@@ -48,8 +48,6 @@ type MappedPositionWithCodeFrames = MappedPosition & { codeFrames: string[] }
 const noHeader = /^v(10\.1[6-9]|10\.[2-9][0-9]|10\.[0-9]{3,}|1[2-9]\d*|[2-9]\d|\d{3,}|11\.11)/
 const headerLength = noHeader.test(process.version) ? 0 : 62
 
-let sourcemapSupport: SourcemapSupport | undefined
-
 // -----------------
 // Install
 // -----------------
@@ -65,17 +63,14 @@ export function installSourcemapSupport(
   projectBaseDir: string,
   sourceMapLookup?: SourceMapLookup
 ) {
-  if (
-    sourcemapSupport != null &&
-    Error.prepareStackTrace === sourcemapSupport.prepareStackTrace
-  )
-    return
-
-  sourcemapSupport = new SourcemapSupport(
+  // NOTE: this is a noop if an instance was created previously
+  const sourcemapSupport = SourcemapSupport.createSingletonInstance(
     cache,
     projectBaseDir,
     sourceMapLookup
   )
+  if (Error.prepareStackTrace === sourcemapSupport.prepareStackTrace) return
+
   Error.prepareStackTrace = sourcemapSupport.prepareStackTrace
 }
 
@@ -84,7 +79,7 @@ export function installSourcemapSupport(
 // -----------------
 class SourcemapSupport {
   private readonly _sourcemapCache: Map<FullScriptPath, UrlAndMap> = new Map()
-  constructor(
+  private constructor(
     private readonly _cache: TranspileCache,
     private readonly _projectBaseDir: string,
     private readonly _sourceMapLookup?: SourceMapLookup
@@ -256,6 +251,28 @@ class SourcemapSupport {
 
   _ensureFullPath(p: string) {
     return path.isAbsolute(p) ? p : path.join(this._projectBaseDir, p)
+  }
+
+  private static _instance?: SourcemapSupport
+
+  /**
+   * Creates a [SourcmapSupport] instance unless one was created previously.
+   * NOTE: that it is impossible for a process to have two instances and the
+   * parameters the first one was created with will remain active for the process lifetime.
+   */
+  static createSingletonInstance(
+    cache: TranspileCache,
+    projectBaseDir: string,
+    sourceMapLookup?: SourceMapLookup
+  ): SourcemapSupport {
+    if (SourcemapSupport._instance == null) {
+      SourcemapSupport._instance = new SourcemapSupport(
+        cache,
+        projectBaseDir,
+        sourceMapLookup
+      )
+    }
+    return SourcemapSupport._instance
   }
 }
 
