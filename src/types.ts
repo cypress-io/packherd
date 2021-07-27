@@ -19,9 +19,9 @@ export type ModuleDefinition = (
 ) => NodeModule
 
 export type ModuleResolveResult = {
-  resolved: 'module:node' | 'module:tsc' | 'path'
+  resolved: 'module:node' | 'module:tsc' | 'path' | 'cache:direct'
   fullPath: string
-  relPath: string
+  moduleRelativePath: string
 }
 
 export type ModuleLoadResult = ModuleResolveResult & {

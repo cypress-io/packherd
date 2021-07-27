@@ -16,10 +16,11 @@ const logTrace = debug('packherd:trace')
 const logSilly = debug('packherd:silly')
 const logWarn = debug('packherd:warn')
 
-export type GetModuleKey = (
-  moduleRelativePath: string,
+export type GetModuleKey = (opts: {
   moduleUri: string
-) => string
+  moduleRelativePath: string
+  parent?: NodeModule
+}) => string
 
 export type ModuleLoaderOpts = {
   diagnostics?: boolean
@@ -29,7 +30,7 @@ export type ModuleLoaderOpts = {
   moduleMapper?: ModuleMapper
 }
 
-const defaultGetModuleKey = (moduleRelativePath: string, _moduleUri: string) =>
+const defaultGetModuleKey: GetModuleKey = ({ moduleRelativePath }) =>
   `./${moduleRelativePath}`
 
 class LoadingModules {
@@ -62,6 +63,14 @@ function identity(
   return moduleUri
 }
 
+type CacheDirectResult = {
+  moduleExport?: Object
+  definition?: Function
+  moduleKey: string
+  fullPath: string
+  moduleRelativePath: string
+}
+
 export class PackherdModuleLoader {
   exportHits: number = 0
   definitionHits: number = 0
@@ -92,12 +101,61 @@ export class PackherdModuleLoader {
     this.loading = new LoadingModules()
   }
 
+  private _tryCacheDirect(
+    moduleUri: string,
+    parent?: NodeModule
+  ): CacheDirectResult | undefined {
+    const moduleRelativePath = path.relative(this.projectBaseDir, moduleUri)
+    const key = this.getModuleKey({ moduleUri, moduleRelativePath, parent })
+
+    // NOTE: that keys for node_modules are expected to be relative paths
+    const fullPath = path.isAbsolute(moduleUri)
+      ? moduleUri
+      : path.resolve(this.projectBaseDir, key)
+
+    const moduleExport = this.moduleExports[key]?.exports
+    if (moduleExport != null)
+      return {
+        moduleExport,
+        moduleKey: key,
+        moduleRelativePath,
+        fullPath,
+      }
+
+    const definition = this.moduleDefinitions[key]
+    if (definition != null)
+      return {
+        definition,
+        moduleKey: key,
+        moduleRelativePath,
+        fullPath,
+      }
+
+    return undefined
+  }
+
   tryLoad(
     moduleUri: string,
     parent: NodeModule,
     isMain: boolean
   ): ModuleLoadResult {
-    let { resolved, fullPath, relPath } = this._resolvePaths(
+    const direct = this._tryCacheDirect(moduleUri, parent)
+    if (direct?.moduleExport != null) {
+      let mod = this._createModule(direct.fullPath, parent, direct.moduleKey)
+      mod.exports = direct.moduleExport
+      this.exportHits++
+      let origin: ModuleLoadResult['origin'] = 'packherd:export'
+
+      return {
+        resolved: 'cache:direct',
+        origin,
+        exports: mod.exports,
+        fullPath: direct.fullPath,
+        moduleRelativePath: direct.moduleRelativePath,
+      }
+    }
+
+    let { resolved, fullPath, moduleRelativePath } = this._resolvePaths(
       moduleUri,
       parent,
       isMain
@@ -109,17 +167,22 @@ export class PackherdModuleLoader {
         origin: 'Module._cache',
         exports: moduleCached.exports,
         fullPath,
-        relPath,
+        moduleRelativePath,
       }
 
     this.benchmark.time(fullPath)
-    const moduleKey = this.getModuleKey(moduleUri, relPath)
+    const moduleKey = this.getModuleKey({
+      moduleUri,
+      moduleRelativePath,
+      parent,
+    })
+
+    let mod: Module | undefined
+    let origin: ModuleLoadResult['origin'] | undefined
 
     // 1. try to resolve from module exports
     const moduleExport: Module = this.moduleExports[moduleKey]
 
-    let mod: Module | undefined
-    let origin: ModuleLoadResult['origin'] | undefined
     if (moduleExport != null) {
       mod = this._createModule(fullPath, parent, moduleKey)
       mod.exports = moduleExport.exports
@@ -168,7 +231,7 @@ export class PackherdModuleLoader {
         origin,
         exports: mod.exports,
         fullPath,
-        relPath,
+        moduleRelativePath,
       }
     }
 
@@ -177,7 +240,13 @@ export class PackherdModuleLoader {
     this.misses++
     this._dumpInfo()
     this.benchmark.timeEnd(fullPath, 'Module._load', this.loading.stack())
-    return { resolved, origin: 'Module._load', exports, fullPath, relPath }
+    return {
+      resolved,
+      origin: 'Module._load',
+      exports,
+      fullPath,
+      moduleRelativePath,
+    }
   }
 
   private _dumpInfo() {
@@ -204,7 +273,7 @@ export class PackherdModuleLoader {
     assert(fullPath != null, `packherd: unresolvable module ${moduleUri}`)
 
     const relPath = path.relative(this.projectBaseDir, fullPath)
-    return { resolved, fullPath, relPath }
+    return { resolved, fullPath, moduleRelativePath: relPath }
   }
 
   private _tryResolveFilename(
@@ -236,6 +305,7 @@ export class PackherdModuleLoader {
       loaded: true,
       parent,
       path: fullPath,
+      // TODO(thlorenz): not entirely correct if parent is nested deeper or higher
       paths: parent?.paths || [],
       require,
     }

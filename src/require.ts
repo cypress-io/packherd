@@ -106,7 +106,7 @@ export function packherdRequire(
     parent: typeof Module,
     isMain: boolean
   ) {
-    logTrace('_load "%s"', moduleUri)
+    logTrace('Module._load "%s"', moduleUri)
     if (Module.builtinModules.includes(moduleUri)) {
       return origLoad(moduleUri, parent, isMain)
     }
@@ -116,7 +116,7 @@ export function packherdRequire(
         origin,
         exports,
         fullPath,
-        relPath,
+        moduleRelativePath,
       } = moduleLoader.tryLoad(moduleUri, parent, isMain)
 
       switch (resolved) {
@@ -125,7 +125,7 @@ export function packherdRequire(
             'Resolved "%s" via %s (%s | %s)',
             moduleUri,
             resolved,
-            relPath,
+            moduleRelativePath,
             fullPath
           )
           break
@@ -135,7 +135,7 @@ export function packherdRequire(
             'Resolved "%s" via %s (%s | %s)',
             moduleUri,
             resolved,
-            relPath,
+            moduleRelativePath,
             fullPath
           )
           break
@@ -148,7 +148,7 @@ export function packherdRequire(
             'Loaded "%s" via %s resolved as (%s | %s)',
             moduleUri,
             origin,
-            relPath,
+            moduleRelativePath,
             fullPath
           )
           break
@@ -156,15 +156,15 @@ export function packherdRequire(
         case 'packherd:export':
         case 'packherd:definition':
         case 'packherd:loading': {
-          logTrace('Loaded "%s" via %s', moduleUri, origin)
+          logTrace('Loaded "%s" via (%s | %s)', moduleUri, origin, resolved)
           break
         }
       }
 
       return exports
     } catch (err) {
-      logError(err)
       if (diagnostics && !moduleUri.endsWith('hook-require')) {
+        logError(err)
         debugger
       }
     }
