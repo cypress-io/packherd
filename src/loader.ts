@@ -64,8 +64,8 @@ function identity(
 }
 
 type CacheDirectResult = {
-  moduleExport?: Object
-  definition?: Function
+  moduleExports?: Object
+  definition?: ModuleDefinition
   moduleKey: string
   fullPath: string
   moduleRelativePath: string
@@ -116,7 +116,7 @@ export class PackherdModuleLoader {
     const moduleExport = this.moduleExports[key]?.exports
     if (moduleExport != null)
       return {
-        moduleExport,
+        moduleExports: moduleExport,
         moduleKey: key,
         moduleRelativePath,
         fullPath,
@@ -134,25 +134,57 @@ export class PackherdModuleLoader {
     return undefined
   }
 
+  private _loadCacheDirect(
+    moduleUri: string,
+    parent?: NodeModule
+  ): ModuleLoadResult | undefined {
+    if (parent == null) return undefined
+
+    const direct = this._tryCacheDirect(moduleUri, parent)
+    if (direct?.moduleExports != null) {
+      const { mod, origin } = this._initModuleFromExport(
+        direct.moduleKey,
+        direct.moduleExports,
+        parent,
+        direct.fullPath
+      )
+      return {
+        resolved: 'cache:direct',
+        origin,
+        exports: mod.exports,
+        fullPath: mod.path,
+        moduleRelativePath: direct.moduleRelativePath,
+      }
+    }
+    if (direct?.definition != null) {
+      const { mod, origin } = this._initModuleFromDefinition(
+        direct.moduleKey,
+        direct.definition,
+        parent,
+        direct.fullPath
+      )
+      if (mod != null) {
+        return {
+          resolved: 'cache:direct',
+          origin,
+          exports: mod.exports,
+          fullPath: mod.path,
+          moduleRelativePath: direct.moduleRelativePath,
+        }
+      }
+    }
+    return undefined
+  }
+
   tryLoad(
     moduleUri: string,
     parent: NodeModule,
     isMain: boolean
   ): ModuleLoadResult {
-    const direct = this._tryCacheDirect(moduleUri, parent)
-    if (direct?.moduleExport != null) {
-      let mod = this._createModule(direct.fullPath, parent, direct.moduleKey)
-      mod.exports = direct.moduleExport
-      this.exportHits++
-      let origin: ModuleLoadResult['origin'] = 'packherd:export'
-
-      return {
-        resolved: 'cache:direct',
-        origin,
-        exports: mod.exports,
-        fullPath: direct.fullPath,
-        moduleRelativePath: direct.moduleRelativePath,
-      }
+    let directResult = this._loadCacheDirect(moduleUri, parent)
+    if (directResult != null) {
+      this._dumpInfo()
+      return directResult
     }
 
     let { resolved, fullPath, moduleRelativePath } = this._resolvePaths(
@@ -184,10 +216,12 @@ export class PackherdModuleLoader {
     const moduleExport: Module = this.moduleExports[moduleKey]
 
     if (moduleExport != null) {
-      mod = this._createModule(fullPath, parent, moduleKey)
-      mod.exports = moduleExport.exports
-      this.exportHits++
-      origin = 'packherd:export'
+      ;({ mod, origin } = this._initModuleFromExport(
+        moduleKey,
+        moduleExport.exports,
+        parent,
+        fullPath
+      ))
     } else {
       const loadingModule = this.loading.retrieve(moduleKey)
       if (loadingModule != null) {
@@ -197,35 +231,23 @@ export class PackherdModuleLoader {
         // 2. try to resolve from module definitions
         const moduleDefinition = this.moduleDefinitions[moduleKey]
         if (moduleDefinition != null) {
-          mod = this._createModule(fullPath, parent, moduleKey)
-          this.loading.start(moduleKey, mod)
-          try {
-            moduleDefinition(
-              mod.exports,
-              mod,
-              fullPath,
-              path.dirname(fullPath),
-              mod.require
-            )
-            this.definitionHits++
-            origin = 'packherd:definition'
-          } catch (err) {
-            logWarn(err.message)
-            logSilly(err)
-            mod = undefined
-          } finally {
-            this.loading.finish(moduleKey)
-          }
+          ;({ mod, origin } = this._initModuleFromDefinition(
+            moduleKey,
+            moduleDefinition,
+            parent,
+            fullPath
+          ))
         }
       }
     }
+
     if (mod != null) {
       assert(origin != null, 'should have set origin when setting module')
 
       this.Module._cache[fullPath] = mod
-      this._dumpInfo()
       this.benchmark.timeEnd(fullPath, origin, this.loading.stack())
 
+      this._dumpInfo()
       return {
         resolved,
         origin,
@@ -308,6 +330,48 @@ export class PackherdModuleLoader {
       // TODO(thlorenz): not entirely correct if parent is nested deeper or higher
       paths: parent?.paths || [],
       require,
+    }
+  }
+
+  private _initModuleFromExport(
+    moduleKey: string,
+    moduleExports: Module['exports'],
+    parent: NodeModule,
+    fullPath: string
+  ) {
+    const mod = this._createModule(fullPath, parent, moduleKey)
+    mod.exports = moduleExports
+    const origin: ModuleLoadResult['origin'] = 'packherd:export'
+    this.exportHits++
+    return { mod, origin }
+  }
+
+  private _initModuleFromDefinition(
+    moduleKey: string,
+    moduleDefinition: ModuleDefinition,
+    parent: NodeModule,
+    fullPath: string
+  ) {
+    const origin: ModuleLoadResult['origin'] = 'packherd:definition'
+    const mod: NodeModule = this._createModule(fullPath, parent, moduleKey)
+    this.loading.start(moduleKey, mod)
+
+    try {
+      moduleDefinition(
+        mod.exports,
+        mod,
+        fullPath,
+        path.dirname(fullPath),
+        mod.require
+      )
+      this.definitionHits++
+      return { mod, origin }
+    } catch (err) {
+      logWarn(err.message)
+      logSilly(err)
+      return { mod: undefined, origin }
+    } finally {
+      this.loading.finish(moduleKey)
     }
   }
 
