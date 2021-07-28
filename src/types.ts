@@ -19,9 +19,15 @@ export type ModuleDefinition = (
 ) => NodeModule
 
 export type ModuleResolveResult = {
-  resolved: 'module:node' | 'module:tsc' | 'path' | 'cache:direct'
+  resolved:
+    | 'module:node'
+    | 'module-uri:node'
+    | 'module-fullpath:node'
+    | 'module-key:node'
+    | 'module:tsc'
+    | 'path'
+    | 'cache:direct'
   fullPath: string
-  moduleRelativePath: string
 }
 
 export type ModuleLoadResult = ModuleResolveResult & {

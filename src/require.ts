@@ -4,6 +4,7 @@ import { DefaultTranspileCache } from './default-transpile-cache'
 import { ModuleLoaderOpts, PackherdModuleLoader } from './loader'
 import { installSourcemapSupport } from './sourcemap-support'
 import type { PackherdTranspileOpts, SourceMapLookup } from './types'
+import path from 'path'
 
 const logInfo = debug('packherd:info')
 const logDebug = debug('packherd:debug')
@@ -111,16 +112,18 @@ export function packherdRequire(
       return origLoad(moduleUri, parent, isMain)
     }
     try {
-      const {
-        resolved,
-        origin,
-        exports,
-        fullPath,
-        moduleRelativePath,
-      } = moduleLoader.tryLoad(moduleUri, parent, isMain)
+      const { resolved, origin, exports, fullPath } = moduleLoader.tryLoad(
+        moduleUri,
+        parent,
+        isMain
+      )
+      const moduleRelativePath = path.relative(projectBaseDir, fullPath)
 
       switch (resolved) {
-        case 'module:node': {
+        case 'module:node':
+        case 'module-uri:node':
+        case 'module-fullpath:node':
+        case 'module-key:node': {
           logTrace(
             'Resolved "%s" via %s (%s | %s)',
             moduleUri,
