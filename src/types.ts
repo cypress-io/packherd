@@ -31,7 +31,7 @@ export type ModuleResolveResult = {
 }
 
 export type ModuleLoadResult = ModuleResolveResult & {
-  exports: NodeModule
+  exports: NodeModule['exports']
   origin:
     | 'packherd:export'
     | 'packherd:definition'

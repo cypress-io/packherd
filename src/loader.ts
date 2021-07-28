@@ -123,7 +123,7 @@ export class PackherdModuleLoader {
     moduleKey?: string,
     fullPath?: string,
     parent?: NodeModule
-  ): ModuleLoadResult | undefined {
+  ): (ModuleLoadResult & { mod: NodeModule }) | undefined {
     if (parent == null || moduleKey == null) {
       return undefined
     }
@@ -141,13 +141,13 @@ export class PackherdModuleLoader {
         parent,
         fullPath
       )
-      const loadedModule: ModuleLoadResult = {
+      return {
         resolved: 'cache:direct',
         origin,
         exports: mod.exports,
+        mod,
         fullPath: mod.path,
       }
-      return loadedModule
     }
     if (direct?.definition != null) {
       const { mod, origin } = this._initModuleFromDefinition(
@@ -158,13 +158,13 @@ export class PackherdModuleLoader {
         fullPath
       )
       if (mod != null) {
-        const loadedModule: ModuleLoadResult = {
+        return {
           resolved: 'cache:direct',
           origin,
           exports: mod.exports,
+          mod,
           fullPath: mod.path,
         }
-        return loadedModule
       }
     }
     return undefined
@@ -177,7 +177,7 @@ export class PackherdModuleLoader {
   ): ModuleLoadResult {
     // 1. Try to find moduleUri directly in Node.js module cache
     if (path.isAbsolute(moduleUri)) {
-      const moduleCached = this.Module._cache[moduleUri]
+      const moduleCached: NodeModule = this.Module._cache[moduleUri]
       if (moduleCached != null) {
         const fullPath = moduleUri
         const resolved = 'module-uri:node'
@@ -218,13 +218,6 @@ export class PackherdModuleLoader {
       moduleRelativePath,
       parent
     )
-    logTrace(
-      'KEY [%s] -> key: %s rel: %s -> %s',
-      moduleUri,
-      moduleKey,
-      moduleRelativePath,
-      fullPath
-    )
 
     // 5. Try again in the Node.js module cache
     if (fullPath != null && fullPath !== moduleUri) {
@@ -249,6 +242,11 @@ export class PackherdModuleLoader {
     )
     if (loadedModule != null) {
       this._dumpInfo()
+      assert(
+        fullPath != null,
+        'Should have full path when cache-direct loading succeeded'
+      )
+      this.Module._cache[fullPath] = loadedModule.mod
       return loadedModule
     }
 
