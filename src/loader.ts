@@ -39,7 +39,7 @@ class LoadingModules {
   private readonly currentlyLoading: Map<string, Module> = new Map()
   start(id: string, mod: Module) {
     if (this.currentlyLoading.has(id)) {
-      throw new Error(`Already loading ${id}`)
+      throw new Error(`Already loading ${id}\nstack: ${this.stack()}`)
     }
     this.currentlyLoading.set(id, mod)
   }
@@ -361,9 +361,9 @@ export class PackherdModuleLoader {
   ) {
     const origin: ModuleLoadResult['origin'] = 'packherd:definition'
     const mod: NodeModule = this._createModule(fullPath, parent, moduleUri)
-    this.loading.start(moduleKey, mod)
 
     try {
+      this.loading.start(moduleKey, mod)
       moduleDefinition(
         mod.exports,
         mod,
