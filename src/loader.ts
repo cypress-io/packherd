@@ -260,7 +260,13 @@ export class PackherdModuleLoader {
     this.benchmark.time(moduleUri)
 
     let resolved: ModuleResolveResult['resolved']
-    ;({ resolved, fullPath } = this._resolvePaths(moduleUri, parent, isMain))
+    const directFullPath = fullPath
+    ;({ resolved, fullPath } = this._resolvePaths(
+      moduleUri,
+      parent,
+      isMain,
+      directFullPath
+    ))
 
     const exports = this.origLoad(fullPath, parent, isMain)
     this.misses++
@@ -302,14 +308,21 @@ export class PackherdModuleLoader {
   private _resolvePaths(
     moduleUri: string,
     parent: NodeModule,
-    isMain: boolean
+    isMain: boolean,
+    directFullPath?: string
   ): ModuleResolveResult {
-    let fullPath: string | undefined
-    let resolved: ModuleResolveResult['resolved']
-
-    moduleUri = this.moduleMapper(parent, moduleUri, this.projectBaseDir)
-    resolved = 'module:node'
-    fullPath = this._tryResolveFilename(moduleUri, parent, isMain)
+    const mappedModuleUri = this.moduleMapper(
+      parent,
+      moduleUri,
+      this.projectBaseDir
+    )
+    const resolved = 'module:node'
+    const fullPath = this._tryResolveFilename(
+      mappedModuleUri,
+      directFullPath,
+      parent,
+      isMain
+    )
     assert(fullPath != null, `packherd: unresolvable module ${moduleUri}`)
     return { resolved, fullPath }
   }
@@ -404,6 +417,7 @@ export class PackherdModuleLoader {
   // -----------------
   private _tryResolveFilename(
     moduleUri: string | undefined,
+    fullPath: string | undefined,
     parent: NodeModule,
     isMain: boolean
   ) {
@@ -411,7 +425,16 @@ export class PackherdModuleLoader {
     try {
       return this.Module._resolveFilename(moduleUri, parent, isMain)
     } catch (err) {
-      return undefined
+      if (fullPath != null) {
+        try {
+          // Resolving moduleUri directly didn't work, let's try again with the full path our algorithm figured out
+          const res = this.Module._resolveFilename(fullPath, parent, isMain)
+          return res
+        } catch (err2) {
+          console.error(err2)
+          return undefined
+        }
+      }
     }
   }
 
