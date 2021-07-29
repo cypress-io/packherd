@@ -203,9 +203,11 @@ export class PackherdModuleLoader {
       if (moduleCached != null) {
         const fullPath = moduleKey
         const resolved = 'module-key:node'
+        const origin = 'Module._cache'
+        this._updateCaches(moduleCached, resolved, origin, moduleKey)
         return {
           resolved,
-          origin: 'Module._cache',
+          origin,
           exports: moduleCached.exports,
           fullPath,
         }
@@ -224,9 +226,11 @@ export class PackherdModuleLoader {
       const moduleCached = this.Module._cache[fullPath]
       if (moduleCached != null) {
         const resolved = 'module-fullpath:node'
+        const origin = 'Module._cache'
+        this._updateCaches(moduleCached, resolved, origin, moduleKey)
         return {
           resolved,
-          origin: 'Module._cache',
+          origin,
           exports: moduleCached.exports,
           fullPath,
         }
@@ -242,11 +246,12 @@ export class PackherdModuleLoader {
     )
     if (loadedModule != null) {
       this._dumpInfo()
-      assert(
-        fullPath != null,
-        'Should have full path when cache-direct loading succeeded'
+      this._updateCaches(
+        loadedModule.mod,
+        loadedModule.resolved,
+        loadedModule.origin,
+        moduleKey
       )
-      this.Module._cache[fullPath] = loadedModule.mod
       return loadedModule
     }
 
@@ -279,6 +284,21 @@ export class PackherdModuleLoader {
     }
   }
 
+  private _updateCaches(
+    mod: NodeModule,
+    resolved: string,
+    origin: string,
+    moduleKey: string | undefined
+  ) {
+    assert(
+      mod.id != null,
+      `Should have module id when loading by ${resolved} via ${origin} succeeded`
+    )
+    this.Module._cache[mod.id] = mod
+    if (moduleKey != null) {
+      this.moduleExports[moduleKey] = mod
+    }
+  }
   private _resolvePaths(
     moduleUri: string,
     parent: NodeModule,
