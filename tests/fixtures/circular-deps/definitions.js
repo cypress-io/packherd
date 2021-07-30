@@ -22,7 +22,7 @@ function entry(exports, module, __filename, __dirname, require) {
 }
 
 module.exports = {
-  'foo.js': foo,
-  'bar.js': bar,
-  'entry.js': entry,
+  './foo.js': foo,
+  './bar.js': bar,
+  './entry.js': entry,
 }

@@ -268,6 +268,27 @@ export class PackherdModuleLoader {
       directFullPath
     ))
 
+    // 8. Something like './foo' might now have been resolved to './foo.js' and
+    // thus we may find it inside our cache that way
+    const derivedModuleKey = `./${path.relative(this.projectBaseDir, fullPath)}`
+    loadedModule = this._loadCacheDirect(
+      moduleUri,
+      derivedModuleKey,
+      fullPath,
+      parent
+    )
+    if (loadedModule != null) {
+      this._dumpInfo()
+      loadedModule.resolved = 'cache:node'
+      this._updateCaches(
+        loadedModule.mod,
+        loadedModule.resolved,
+        loadedModule.origin,
+        moduleKey
+      )
+      return loadedModule
+    }
+
     const exports = this.origLoad(fullPath, parent, isMain)
     this.misses++
     this._dumpInfo()

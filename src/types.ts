@@ -27,6 +27,7 @@ export type ModuleResolveResult = {
     | 'module:tsc'
     | 'path'
     | 'cache:direct'
+    | 'cache:node'
   fullPath: string
 }
 

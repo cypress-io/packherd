@@ -123,7 +123,8 @@ export function packherdRequire(
         case 'module:node':
         case 'module-uri:node':
         case 'module-fullpath:node':
-        case 'module-key:node': {
+        case 'module-key:node':
+        case 'cache:node': {
           logTrace(
             'Resolved "%s" via %s (%s | %s)',
             moduleUri,

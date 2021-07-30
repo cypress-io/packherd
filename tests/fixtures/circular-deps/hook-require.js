@@ -6,9 +6,16 @@ const entryFile = require.resolve('./lib/entry')
 
 const logDebug = debug('packherd:debug')
 
-function getModuleKey(moduleRelativePath, moduleUri) {
-  logDebug({ moduleRelativePath, moduleUri })
-  return moduleUri
+function getModuleKey({ moduleUri, baseDir }) {
+  const moduleRelativePath = path.isAbsolute(moduleUri)
+    ? path.relative(baseDir, moduleUri)
+    : moduleUri
+
+  logDebug({ baseDir, moduleUri, moduleRelativePath })
+  return {
+    moduleKey: moduleUri,
+    moduleRelativePath,
+  }
 }
 
 const projectBaseDir = path.dirname(entryFile)
