@@ -151,7 +151,6 @@ export class PackherdModuleLoader {
     }
     if (direct?.definition != null) {
       const { mod, origin } = this._initModuleFromDefinition(
-        moduleKey,
         moduleUri,
         direct.definition,
         parent,
@@ -259,8 +258,8 @@ export class PackherdModuleLoader {
     //    in which case it throws an error
     this.benchmark.time(moduleUri)
 
-    let resolved: ModuleResolveResult['resolved']
     const directFullPath = fullPath
+    let resolved: ModuleResolveResult['resolved']
     ;({ resolved, fullPath } = this._resolvePaths(
       moduleUri,
       parent,
@@ -288,7 +287,6 @@ export class PackherdModuleLoader {
       )
       return loadedModule
     }
-
     const exports = this.origLoad(fullPath, parent, isMain)
     this.misses++
     this._dumpInfo()
@@ -364,7 +362,7 @@ export class PackherdModuleLoader {
       exports: {},
       filename: fullPath,
       id: fullPath,
-      loaded: true,
+      loaded: false,
       parent,
       path: fullPath,
       // TODO(thlorenz): not entirely correct if parent is nested deeper or higher
@@ -381,23 +379,27 @@ export class PackherdModuleLoader {
   ) {
     const mod = this._createModule(fullPath, parent, moduleUri)
     mod.exports = moduleExports
+    mod.loaded = true
     const origin: ModuleLoadResult['origin'] = 'packherd:export'
     this.exportHits++
     return { mod, origin }
   }
 
   private _initModuleFromDefinition(
-    moduleKey: string,
     moduleUri: string,
     moduleDefinition: ModuleDefinition,
     parent: NodeModule,
     fullPath: string
   ) {
     const origin: ModuleLoadResult['origin'] = 'packherd:definition'
+
+    const loading = this.loading.retrieve(fullPath)
+    if (loading != null) return { mod: loading, origin }
+
     const mod: NodeModule = this._createModule(fullPath, parent, moduleUri)
 
     try {
-      this.loading.start(moduleKey, mod)
+      this.loading.start(fullPath, mod)
       moduleDefinition(
         mod.exports,
         mod,
@@ -405,6 +407,7 @@ export class PackherdModuleLoader {
         path.dirname(fullPath),
         mod.require
       )
+      mod.loaded = true
       this.definitionHits++
       return { mod, origin }
     } catch (err) {
@@ -412,7 +415,7 @@ export class PackherdModuleLoader {
       logSilly(err)
       return { mod: undefined, origin }
     } finally {
-      this.loading.finish(moduleKey)
+      this.loading.finish(fullPath)
     }
   }
 
