@@ -11,6 +11,7 @@ import convertSourceMap from 'convert-source-map'
 import { DefaultTranspileCache } from './default-transpile-cache'
 
 const logError = debug('packherd:error')
+const logDebug = debug('packherd:debug')
 const logTrace = debug('packherd:trace')
 
 const INCLUDE_CODE_BEFORE = 2
@@ -130,6 +131,7 @@ export function installSourcemapSupport(
     sourceMapLookup
   )
   if (Error.prepareStackTrace === sourcemapSupport.prepareStackTrace) return
+  logDebug('Installing sourcemap')
 
   Error.prepareStackTrace = sourcemapSupport.prepareStackTrace
 }
@@ -166,8 +168,10 @@ class SourcemapSupport {
         // Keep trying to include some code until we succeeded once
         includeCodeFrames = c.codeFrames.length === 0
       }
-      for (const codeFrame of c.codeFrames.reverse()) {
-        processedStack.push(`\n      ${codeFrame}`)
+      if (c.codeFrames != null) {
+        for (const codeFrame of c.codeFrames.reverse()) {
+          processedStack.push(`\n      ${codeFrame}`)
+        }
       }
       processedStack.push('\n    at ' + c)
       state.nextPos = state.curPos

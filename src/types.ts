@@ -19,13 +19,20 @@ export type ModuleDefinition = (
 ) => NodeModule
 
 export type ModuleResolveResult = {
-  resolved: 'module:node' | 'module:tsc' | 'path'
+  resolved:
+    | 'module:node'
+    | 'module-uri:node'
+    | 'module-fullpath:node'
+    | 'module-key:node'
+    | 'module:tsc'
+    | 'path'
+    | 'cache:direct'
+    | 'cache:node'
   fullPath: string
-  relPath: string
 }
 
 export type ModuleLoadResult = ModuleResolveResult & {
-  exports: NodeModule
+  exports: NodeModule['exports']
   origin:
     | 'packherd:export'
     | 'packherd:definition'

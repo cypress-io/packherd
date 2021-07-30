@@ -4,6 +4,7 @@ import { DefaultTranspileCache } from './default-transpile-cache'
 import { ModuleLoaderOpts, PackherdModuleLoader } from './loader'
 import { installSourcemapSupport } from './sourcemap-support'
 import type { PackherdTranspileOpts, SourceMapLookup } from './types'
+import path from 'path'
 
 const logInfo = debug('packherd:info')
 const logDebug = debug('packherd:debug')
@@ -106,26 +107,29 @@ export function packherdRequire(
     parent: typeof Module,
     isMain: boolean
   ) {
-    logTrace('_load "%s"', moduleUri)
+    logTrace('Module._load "%s"', moduleUri)
     if (Module.builtinModules.includes(moduleUri)) {
       return origLoad(moduleUri, parent, isMain)
     }
     try {
-      const {
-        resolved,
-        origin,
-        exports,
-        fullPath,
-        relPath,
-      } = moduleLoader.tryLoad(moduleUri, parent, isMain)
+      const { resolved, origin, exports, fullPath } = moduleLoader.tryLoad(
+        moduleUri,
+        parent,
+        isMain
+      )
+      const moduleRelativePath = path.relative(projectBaseDir, fullPath)
 
       switch (resolved) {
-        case 'module:node': {
+        case 'module:node':
+        case 'module-uri:node':
+        case 'module-fullpath:node':
+        case 'module-key:node':
+        case 'cache:node': {
           logTrace(
             'Resolved "%s" via %s (%s | %s)',
             moduleUri,
             resolved,
-            relPath,
+            moduleRelativePath,
             fullPath
           )
           break
@@ -135,7 +139,7 @@ export function packherdRequire(
             'Resolved "%s" via %s (%s | %s)',
             moduleUri,
             resolved,
-            relPath,
+            moduleRelativePath,
             fullPath
           )
           break
@@ -148,7 +152,7 @@ export function packherdRequire(
             'Loaded "%s" via %s resolved as (%s | %s)',
             moduleUri,
             origin,
-            relPath,
+            moduleRelativePath,
             fullPath
           )
           break
@@ -156,15 +160,15 @@ export function packherdRequire(
         case 'packherd:export':
         case 'packherd:definition':
         case 'packherd:loading': {
-          logTrace('Loaded "%s" via %s', moduleUri, origin)
+          logTrace('Loaded "%s" via (%s | %s)', moduleUri, origin, resolved)
           break
         }
       }
 
       return exports
     } catch (err) {
-      logError(err)
       if (diagnostics && !moduleUri.endsWith('hook-require')) {
+        logError(err)
         debugger
       }
     }
