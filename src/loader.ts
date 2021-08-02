@@ -16,10 +16,18 @@ const logTrace = debug('packherd:trace')
 const logSilly = debug('packherd:silly')
 const logWarn = debug('packherd:warn')
 
+export type GetModuleKeyOpts = {
+  filename: string
+  path: string
+  relFilename?: string
+  relPath?: string
+  fromSnapshot?: boolean
+}
+
 export type GetModuleKey = (opts: {
   moduleUri: string
   baseDir: string
-  parent?: NodeModule
+  opts?: GetModuleKeyOpts
 }) => { moduleKey: string | undefined; moduleRelativePath: string | undefined }
 
 export type ModuleLoaderOpts = {
@@ -169,6 +177,46 @@ export class PackherdModuleLoader {
     return undefined
   }
 
+  tryResolve(moduleUri: string, opts?: GetModuleKeyOpts): ModuleResolveResult {
+    // 1. If is full path we are done
+    if (path.isAbsolute(moduleUri)) {
+      return { fullPath: moduleUri, resolved: 'path' }
+    }
+
+    // 2. Resolve via module key
+    let { moduleKey, moduleRelativePath } = this.getModuleKey({
+      moduleUri,
+      baseDir: this.projectBaseDir,
+      opts,
+    })
+
+    if (moduleKey != null && path.isAbsolute(moduleKey)) {
+      return { fullPath: moduleKey, resolved: 'module-key:node' }
+    }
+
+    // 3. Try to obtain a full path via the resolved relative path
+    let fullPath = this._tryResolveFullPath(moduleUri, moduleRelativePath, opts)
+
+    if (fullPath != null) {
+      return { fullPath, resolved: 'module-fullpath:node' }
+    }
+
+    // 4. Lastly try to resolve the module via Node.js resolution
+    assert(
+      opts != null && (opts as NodeModule).id != null,
+      'Need a parent to resolve via Node.js'
+    )
+    const directFullPath = fullPath
+    let resolved: ModuleResolveResult['resolved']
+    ;({ resolved, fullPath } = this._resolvePaths(
+      moduleUri,
+      opts as NodeModule,
+      false,
+      directFullPath
+    ))
+    return { fullPath, resolved }
+  }
+
   tryLoad(
     moduleUri: string,
     parent: NodeModule,
@@ -193,7 +241,7 @@ export class PackherdModuleLoader {
     let { moduleKey, moduleRelativePath } = this.getModuleKey({
       moduleUri,
       baseDir: this.projectBaseDir,
-      parent,
+      opts: parent,
     })
 
     // 3. Try to see if the moduleKey was correct and can be loaded from the Node.js cache
@@ -351,12 +399,12 @@ export class PackherdModuleLoader {
   // -----------------
   private _createModule(
     fullPath: string,
-    parent: Module,
+    parent: Module | undefined,
     moduleUri: string
   ): NodeModule {
     const require = this.diagnostics
-      ? this._interceptedRequire(fullPath, moduleUri)
-      : this.Module.createRequire(fullPath)
+      ? this._interceptedRequire(fullPath, moduleUri, parent)
+      : this._createRequire(fullPath, moduleUri, parent)
     return {
       children: [],
       exports: {},
@@ -419,11 +467,36 @@ export class PackherdModuleLoader {
     }
   }
 
+  private _createRequire(
+    fullPath: string,
+    moduleUri: string,
+    parent?: NodeModule
+  ) {
+    const require = this.Module.createRequire(fullPath)
+    if (parent == null) {
+      parent = this._createModule(fullPath, parent, moduleUri)
+    }
+
+    require.resolve = Object.assign(
+      (moduleUri: string, _options?: { paths?: string[] }) => {
+        return this.tryResolve(moduleUri, parent).fullPath
+      },
+      {
+        paths(request: string) {
+          if (Module.builtinModules.includes(request)) return null
+          return parent?.paths || null
+        },
+      }
+    )
+
+    return require
+  }
   private _interceptedRequire(
     fullPath: string,
-    moduleUri: string
+    moduleUri: string,
+    parent?: NodeModule
   ): NodeRequire {
-    const require = this.Module.createRequire(fullPath)
+    const require = this._createRequire(fullPath, moduleUri, parent)
     const override = (id: string) => {
       logTrace('Module "%s" is requiring "%s"', moduleUri, id)
       return require(id)
@@ -465,15 +538,15 @@ export class PackherdModuleLoader {
   private _tryResolveFullPath(
     moduleUri: string,
     moduleRelativePath?: string,
-    parent?: NodeModule
+    opts?: GetModuleKeyOpts
   ): string | undefined {
     if (path.isAbsolute(moduleUri)) return moduleUri
 
     if (moduleRelativePath != null) {
       return path.resolve(this.projectBaseDir, moduleRelativePath)
     }
-    if (parent != null && moduleUri.startsWith('.')) {
-      return path.resolve(parent.path, moduleUri)
+    if (opts != null && moduleUri.startsWith('.')) {
+      return path.resolve(opts.path, moduleUri)
     }
   }
 }
