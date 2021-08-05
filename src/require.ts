@@ -81,7 +81,7 @@ export function packherdRequire(
     logInfo(
       'No moduleExports nor moduleDefinitions provided, not hooking Module._load'
     )
-    return
+    return { resolve: require.resolve.bind(require) }
   }
 
   const benchmark: Benchmark = setupBenchmark(
@@ -173,4 +173,6 @@ export function packherdRequire(
       }
     }
   }
+
+  return { resolve: moduleLoader.tryResolve.bind(moduleLoader) }
 }
