@@ -1,7 +1,11 @@
 import debug from 'debug'
 import { Benchmark, setupBenchmark } from './benchmark'
 import { DefaultTranspileCache } from './default-transpile-cache'
-import { ModuleLoaderOpts, PackherdModuleLoader } from './loader'
+import {
+  GetModuleKeyOpts,
+  ModuleLoaderOpts,
+  PackherdModuleLoader,
+} from './loader'
 import { installSourcemapSupport } from './sourcemap-support'
 import type { PackherdTranspileOpts, SourceMapLookup } from './types'
 import path from 'path'
@@ -174,5 +178,11 @@ export function packherdRequire(
     }
   }
 
-  return { resolve: moduleLoader.tryResolve.bind(moduleLoader) }
+  return {
+    resolve(uri: string, opts?: GetModuleKeyOpts) {
+      return moduleLoader.tryResolve(uri, opts).fullPath
+    },
+    shouldBypassCache: moduleLoader.shouldBypassCache.bind(moduleLoader),
+    registerModuleLoad: moduleLoader.registerModuleLoad.bind(moduleLoader),
+  }
 }

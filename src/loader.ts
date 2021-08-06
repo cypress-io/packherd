@@ -22,6 +22,7 @@ export type GetModuleKeyOpts = {
   relFilename?: string
   relPath?: string
   fromSnapshot?: boolean
+  isResolve?: boolean
 }
 
 export type GetModuleKey = (opts: {
@@ -76,7 +77,7 @@ class CacheTracker {
     mod: NodeModule,
     resolved: string,
     origin: string,
-    moduleKey: string | undefined
+    moduleKey?: string
   ) {
     assert(
       mod.id != null,
@@ -87,9 +88,24 @@ class CacheTracker {
       this._moduleExports[moduleKey] = mod
     }
     this._loadedModules.add(mod.id)
+
+    if (logTrace.enabled) {
+      logTrace(
+        'Loaded "%s" (%s | %s) -> moduleCache: %d, exportsCache: %d, loaded: %d',
+        mod.id,
+        resolved,
+        origin,
+        Object.keys(this._moduleCache).length,
+        Object.keys(this._moduleExports).length,
+        this._loadedModules.size
+      )
+    }
   }
 
   deletedFromModuleCache(mod: NodeModule) {
+    // We update our exports cache when loading a module, thus if it came from there
+    // and doesn't have one yet that means that it was never loaded before
+    if (mod.id == null) return false
     return this._loadedModules.has(mod.id) && this._moduleCache[mod.id] == null
   }
 }
@@ -100,6 +116,10 @@ function identity(
   _projectBasedir: string
 ) {
   return moduleUri
+}
+
+function needsFullPathResolve(p: string) {
+  return !path.isAbsolute(p) && p.startsWith('./')
 }
 
 type CacheDirectResult = {
@@ -140,16 +160,34 @@ export class PackherdModuleLoader {
   }
 
   // -----------------
+  // Loading within Exports Cache
+  // -----------------
+  shouldBypassCache(mod: NodeModule) {
+    this._ensureFullPathExportsModule(mod)
+    return this.cacheTracker.deletedFromModuleCache(mod)
+  }
+
+  registerModuleLoad(mod: NodeModule) {
+    this._ensureFullPathExportsModule(mod)
+    this.cacheTracker.addLoaded(mod, 'cache', 'exports')
+  }
+
+  // -----------------
   // Cache Direct
   // -----------------
   private _tryCacheDirect(moduleKey?: string): CacheDirectResult {
     if (moduleKey == null) return {}
 
-    const moduleExport = this.moduleExports[moduleKey]?.exports
-    if (moduleExport != null)
-      return {
-        moduleExports: moduleExport,
+    const mod = this.moduleExports[moduleKey]
+    if (mod != null) {
+      this._ensureFullPathExportsModule(mod)
+      if (!this.cacheTracker.deletedFromModuleCache(mod)) {
+        const moduleExport = mod.exports
+        return {
+          moduleExports: moduleExport,
+        }
       }
+    }
 
     const definition = this.moduleDefinitions[moduleKey]
     return {
@@ -572,6 +610,18 @@ export class PackherdModuleLoader {
     }
     if (opts != null && moduleUri.startsWith('.')) {
       return path.resolve(opts.path, moduleUri)
+    }
+  }
+
+  private _ensureFullPathExportsModule(mod: NodeModule) {
+    if (needsFullPathResolve(mod.id)) {
+      mod.id = path.resolve(this.projectBaseDir, mod.id)
+    }
+    if (needsFullPathResolve(mod.filename)) {
+      mod.filename = path.resolve(this.projectBaseDir, mod.filename)
+    }
+    if (needsFullPathResolve(mod.path)) {
+      mod.path = path.resolve(this.projectBaseDir, mod.path)
     }
   }
 }
