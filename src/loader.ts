@@ -65,6 +65,35 @@ class LoadingModules {
   }
 }
 
+class CacheTracker {
+  private readonly _loadedModules: Set<string> = new Set()
+  constructor(
+    private readonly _moduleCache: Record<string, NodeModule>,
+    private readonly _moduleExports: Record<string, Module>
+  ) {}
+
+  addLoaded(
+    mod: NodeModule,
+    resolved: string,
+    origin: string,
+    moduleKey: string | undefined
+  ) {
+    assert(
+      mod.id != null,
+      `Should have module id when loading by ${resolved} via ${origin} succeeded`
+    )
+    this._moduleCache[mod.id] = mod
+    if (moduleKey != null) {
+      this._moduleExports[moduleKey] = mod
+    }
+    this._loadedModules.add(mod.id)
+  }
+
+  deletedFromModuleCache(mod: NodeModule) {
+    return this._loadedModules.has(mod.id) && this._moduleCache[mod.id] == null
+  }
+}
+
 function identity(
   _mod: NodeModule,
   moduleUri: string,
@@ -88,6 +117,7 @@ export class PackherdModuleLoader {
   private readonly moduleDefinitions: Record<string, ModuleDefinition>
   private readonly loading: LoadingModules
   private readonly moduleMapper: ModuleMapper
+  private readonly cacheTracker: CacheTracker
 
   constructor(
     private readonly Module: ModuleBuiltin,
@@ -106,6 +136,7 @@ export class PackherdModuleLoader {
     this.moduleDefinitions = opts.moduleDefinitions ?? {}
     this.moduleMapper = opts.moduleMapper ?? identity
     this.loading = new LoadingModules()
+    this.cacheTracker = new CacheTracker(this.Module._cache, this.moduleExports)
   }
 
   // -----------------
@@ -251,7 +282,7 @@ export class PackherdModuleLoader {
         const fullPath = moduleKey
         const resolved = 'module-key:node'
         const origin = 'Module._cache'
-        this._updateCaches(moduleCached, resolved, origin, moduleKey)
+        this.cacheTracker.addLoaded(moduleCached, resolved, origin, moduleKey)
         return {
           resolved,
           origin,
@@ -274,7 +305,7 @@ export class PackherdModuleLoader {
       if (moduleCached != null) {
         const resolved = 'module-fullpath:node'
         const origin = 'Module._cache'
-        this._updateCaches(moduleCached, resolved, origin, moduleKey)
+        this.cacheTracker.addLoaded(moduleCached, resolved, origin, moduleKey)
         return {
           resolved,
           origin,
@@ -293,7 +324,8 @@ export class PackherdModuleLoader {
     )
     if (loadedModule != null) {
       this._dumpInfo()
-      this._updateCaches(
+
+      this.cacheTracker.addLoaded(
         loadedModule.mod,
         loadedModule.resolved,
         loadedModule.origin,
@@ -327,7 +359,7 @@ export class PackherdModuleLoader {
     if (loadedModule != null) {
       this._dumpInfo()
       loadedModule.resolved = 'cache:node'
-      this._updateCaches(
+      this.cacheTracker.addLoaded(
         loadedModule.mod,
         loadedModule.resolved,
         loadedModule.origin,
@@ -335,13 +367,21 @@ export class PackherdModuleLoader {
       )
       return loadedModule
     }
+
     const exports = this.origLoad(fullPath, parent, isMain)
+    // Node.js load only returns the `exports` object thus we need to get the
+    // module itself from the cache to which it was added during load
+    const nodeModule = this.Module._cache[fullPath]
+
     this.misses++
     this._dumpInfo()
     this.benchmark.timeEnd(moduleUri, 'Module._load', this.loading.stack())
+
+    const origin = 'Module._load'
+    this.cacheTracker.addLoaded(nodeModule, resolved, origin, moduleKey)
     return {
       resolved,
-      origin: 'Module._load',
+      origin,
       exports,
       fullPath,
     }
@@ -357,21 +397,6 @@ export class PackherdModuleLoader {
     }
   }
 
-  private _updateCaches(
-    mod: NodeModule,
-    resolved: string,
-    origin: string,
-    moduleKey: string | undefined
-  ) {
-    assert(
-      mod.id != null,
-      `Should have module id when loading by ${resolved} via ${origin} succeeded`
-    )
-    this.Module._cache[mod.id] = mod
-    if (moduleKey != null) {
-      this.moduleExports[moduleKey] = mod
-    }
-  }
   private _resolvePaths(
     moduleUri: string,
     parent: NodeModule,
