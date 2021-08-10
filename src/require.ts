@@ -7,7 +7,11 @@ import {
   PackherdModuleLoader,
 } from './loader'
 import { installSourcemapSupport } from './sourcemap-support'
-import type { PackherdTranspileOpts, SourceMapLookup } from './types'
+import type {
+  ModuleNeedsReload,
+  PackherdTranspileOpts,
+  SourceMapLookup,
+} from './types'
 import path from 'path'
 
 const logInfo = debug('packherd:info')
@@ -20,6 +24,7 @@ export type PackherdRequireOpts = ModuleLoaderOpts & {
   requireStatsFile?: string
   transpileOpts?: Partial<PackherdTranspileOpts>
   sourceMapLookup?: SourceMapLookup
+  moduleNeedsReload?: ModuleNeedsReload
 }
 
 const DEFAULT_TRANSPILE_OPTS = {

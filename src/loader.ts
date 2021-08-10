@@ -7,6 +7,7 @@ import {
   ModuleLoadResult,
   ModuleResolveResult,
   ModuleMapper,
+  ModuleNeedsReload,
 } from './types'
 import { Benchmark } from './benchmark'
 import { strict as assert } from 'assert'
@@ -36,6 +37,7 @@ export type ModuleLoaderOpts = {
   moduleExports?: Record<string, Module>
   moduleDefinitions?: Record<string, ModuleDefinition>
   getModuleKey?: GetModuleKey
+  moduleNeedsReload?: ModuleNeedsReload
   moduleMapper?: ModuleMapper
 }
 
@@ -66,11 +68,20 @@ class LoadingModules {
   }
 }
 
+function defaultModuleNeedsReload(
+  moduleId: string,
+  loadedModules: Set<string>,
+  moduleCache: Record<string, NodeModule>
+) {
+  return loadedModules.has(moduleId) && moduleCache == null
+}
+
 class CacheTracker {
   private readonly _loadedModules: Set<string> = new Set()
   constructor(
     private readonly _moduleCache: Record<string, NodeModule>,
-    private readonly _moduleExports: Record<string, Module>
+    private readonly _moduleExports: Record<string, Module>,
+    private readonly _moduleNeedsReload: ModuleNeedsReload
   ) {}
 
   addLoaded(
@@ -102,11 +113,15 @@ class CacheTracker {
     }
   }
 
-  deletedFromModuleCache(mod: NodeModule) {
+  moduleNeedsReload(mod: NodeModule) {
     // We update our exports cache when loading a module, thus if it came from there
     // and doesn't have one yet that means that it was never loaded before
     if (mod.id == null) return false
-    return this._loadedModules.has(mod.id) && this._moduleCache[mod.id] == null
+    return this._moduleNeedsReload(
+      mod.id,
+      this._loadedModules,
+      this._moduleCache
+    )
   }
 }
 
@@ -156,7 +171,11 @@ export class PackherdModuleLoader {
     this.moduleDefinitions = opts.moduleDefinitions ?? {}
     this.moduleMapper = opts.moduleMapper ?? identity
     this.loading = new LoadingModules()
-    this.cacheTracker = new CacheTracker(this.Module._cache, this.moduleExports)
+    this.cacheTracker = new CacheTracker(
+      this.Module._cache,
+      this.moduleExports,
+      opts.moduleNeedsReload ?? defaultModuleNeedsReload
+    )
   }
 
   // -----------------
@@ -164,7 +183,7 @@ export class PackherdModuleLoader {
   // -----------------
   shouldBypassCache(mod: NodeModule) {
     this._ensureFullPathExportsModule(mod)
-    return this.cacheTracker.deletedFromModuleCache(mod)
+    return this.cacheTracker.moduleNeedsReload(mod)
   }
 
   registerModuleLoad(mod: NodeModule) {
@@ -181,7 +200,7 @@ export class PackherdModuleLoader {
     const mod = this.moduleExports[moduleKey]
     if (mod != null) {
       this._ensureFullPathExportsModule(mod)
-      if (!this.cacheTracker.deletedFromModuleCache(mod)) {
+      if (!this.cacheTracker.moduleNeedsReload(mod)) {
         const moduleExport = mod.exports
         return {
           moduleExports: moduleExport,
@@ -614,6 +633,7 @@ export class PackherdModuleLoader {
   }
 
   private _ensureFullPathExportsModule(mod: NodeModule) {
+    if (mod.id == null) mod.id = mod.filename
     if (needsFullPathResolve(mod.id)) {
       mod.id = path.resolve(this.projectBaseDir, mod.id)
     }

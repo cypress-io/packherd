@@ -115,3 +115,12 @@ export type MapAndSourceContent = {
   map: SourceMapConsumer
   sourceContent: string
 }
+
+// -----------------
+// Module Resolution
+// -----------------
+export type ModuleNeedsReload = (
+  moduleId: string,
+  loadedModules: Set<string>,
+  moduleCache: Record<string, NodeModule>
+) => boolean
