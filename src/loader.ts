@@ -189,17 +189,29 @@ export class PackherdModuleLoader {
   registerModuleLoad(mod: NodeModule) {
     this._ensureFullPathExportsModule(mod)
     this.cacheTracker.addLoaded(mod, 'cache', 'exports')
+    this.exportHits++
+    this._dumpInfo()
   }
 
   // -----------------
   // Cache Direct
   // -----------------
-  private _tryCacheDirect(moduleKey?: string): CacheDirectResult {
+  private _tryCacheDirect(
+    fullPath: string,
+    moduleKey?: string
+  ): CacheDirectResult {
     if (moduleKey == null) return {}
 
     const mod = this.moduleExports[moduleKey]
+
     if (mod != null) {
-      this._ensureFullPathExportsModule(mod)
+      mod.filename = fullPath
+      mod.id = fullPath
+      mod.path = path.dirname(fullPath)
+
+      if (mod.parent != null) {
+        this._ensureFullPathExportsModule(mod.parent)
+      }
       if (!this.cacheTracker.moduleNeedsReload(mod)) {
         const moduleExport = mod.exports
         return {
@@ -228,7 +240,7 @@ export class PackherdModuleLoader {
       'fullPath should be set when moduleKey was provided'
     )
 
-    const direct = this._tryCacheDirect(moduleKey)
+    const direct = this._tryCacheDirect(fullPath, moduleKey)
 
     if (direct?.moduleExports != null) {
       const { mod, origin } = this._initModuleFromExport(
@@ -579,9 +591,9 @@ export class PackherdModuleLoader {
     parent?: NodeModule
   ): NodeRequire {
     const require = this._createRequire(fullPath, moduleUri, parent)
-    const override = (id: string) => {
+    const override = function (this: NodeModule, id: string) {
       logTrace('Module "%s" is requiring "%s"', moduleUri, id)
-      return require(id)
+      return require.call(this, id)
     }
     override.main = require.main
     override.cache = require.cache
