@@ -189,5 +189,6 @@ export function packherdRequire(
     },
     shouldBypassCache: moduleLoader.shouldBypassCache.bind(moduleLoader),
     registerModuleLoad: moduleLoader.registerModuleLoad.bind(moduleLoader),
+    tryLoad: moduleLoader.tryLoad.bind(moduleLoader),
   }
 }

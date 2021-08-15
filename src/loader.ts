@@ -84,6 +84,10 @@ class CacheTracker {
     private readonly _moduleNeedsReload: ModuleNeedsReload
   ) {}
 
+  addLoadedById(id: string) {
+    this._loadedModules.add(id)
+  }
+
   addLoaded(
     mod: NodeModule,
     resolved: string,
@@ -362,6 +366,7 @@ export class PackherdModuleLoader {
     }
 
     // 4. Try to obtain a full path
+    this._ensureParentPaths(parent)
     let fullPath = this._tryResolveFullPath(
       moduleUri,
       moduleRelativePath,
@@ -447,7 +452,11 @@ export class PackherdModuleLoader {
     this.benchmark.timeEnd(moduleUri, 'Module._load', this.loading.stack())
 
     const origin = 'Module._load'
-    this.cacheTracker.addLoaded(nodeModule, resolved, origin, moduleKey)
+    if (nodeModule != null) {
+      this.cacheTracker.addLoaded(nodeModule, resolved, origin, moduleKey)
+    } else {
+      this.cacheTracker.addLoadedById(fullPath)
+    }
     return {
       resolved,
       origin,
@@ -472,14 +481,17 @@ export class PackherdModuleLoader {
     isMain: boolean,
     directFullPath?: string
   ): ModuleResolveResult {
-    const mappedModuleUri = this.moduleMapper(
-      parent,
-      moduleUri,
-      this.projectBaseDir
-    )
+    if (1 + 1 !== 2) {
+      const mappedModuleUri = this.moduleMapper(
+        parent,
+        moduleUri,
+        this.projectBaseDir
+      )
+      console.log(mappedModuleUri)
+    }
     const resolved = 'module:node'
     const fullPath = this._tryResolveFilename(
-      mappedModuleUri,
+      moduleUri,
       directFullPath,
       parent,
       isMain
@@ -654,6 +666,21 @@ export class PackherdModuleLoader {
     }
     if (needsFullPathResolve(mod.path)) {
       mod.path = path.resolve(this.projectBaseDir, mod.path)
+    }
+  }
+
+  private _ensureParentPaths(parent: NodeModule) {
+    if (
+      parent.paths == null ||
+      (parent.paths.length === 0 && parent.path != null)
+    ) {
+      let dir = path.resolve(this.projectBaseDir, parent.path)
+      parent.paths = []
+      while (dir.length > this.projectBaseDir.length) {
+        parent.paths.push(path.join(dir, 'node_modules'))
+        dir = path.dirname(dir)
+      }
+      parent.paths.push(path.join(dir, 'node_modules'))
     }
   }
 }
