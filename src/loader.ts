@@ -366,7 +366,9 @@ export class PackherdModuleLoader {
     }
 
     // 4. Try to obtain a full path
-    this._ensureParentPaths(parent)
+    if (parent != null) {
+      this._ensureParentPaths(parent)
+    }
     let fullPath = this._tryResolveFullPath(
       moduleUri,
       moduleRelativePath,
@@ -520,7 +522,7 @@ export class PackherdModuleLoader {
       parent,
       path: fullPath,
       // TODO(thlorenz): not entirely correct if parent is nested deeper or higher
-      paths: parent?.paths || [],
+      paths: parent?.paths ?? [],
       require,
     }
   }
@@ -590,7 +592,7 @@ export class PackherdModuleLoader {
       {
         paths(request: string) {
           if (Module.builtinModules.includes(request)) return null
-          return parent?.paths || null
+          return parent?.paths ?? null
         },
       }
     )
@@ -658,13 +660,13 @@ export class PackherdModuleLoader {
 
   private _ensureFullPathExportsModule(mod: NodeModule) {
     if (mod.id == null) mod.id = mod.filename
-    if (needsFullPathResolve(mod.id)) {
+    if (mod.id != null && needsFullPathResolve(mod.id)) {
       mod.id = path.resolve(this.projectBaseDir, mod.id)
     }
-    if (needsFullPathResolve(mod.filename)) {
+    if (mod.filename != null && needsFullPathResolve(mod.filename)) {
       mod.filename = path.resolve(this.projectBaseDir, mod.filename)
     }
-    if (needsFullPathResolve(mod.path)) {
+    if (mod.path != null && needsFullPathResolve(mod.path)) {
       mod.path = path.resolve(this.projectBaseDir, mod.path)
     }
   }
