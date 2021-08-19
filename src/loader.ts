@@ -306,6 +306,9 @@ export class PackherdModuleLoader {
     }
 
     // 4. Lastly try to resolve the module via Node.js resolution
+    if (opts != null) {
+      this._ensureParentPaths(opts)
+    }
     assert(
       opts != null && (opts as NodeModule).id != null,
       'Need a parent to resolve via Node.js'
@@ -498,6 +501,9 @@ export class PackherdModuleLoader {
       parent,
       isMain
     )
+    if (fullPath == null) {
+      debugger
+    }
     assert(fullPath != null, `packherd: unresolvable module ${moduleUri}`)
     return { resolved, fullPath }
   }
@@ -691,7 +697,7 @@ export class PackherdModuleLoader {
     }
   }
 
-  private _ensureParentPaths(parent: NodeModule) {
+  private _ensureParentPaths(parent: { path: string; paths?: string[] }) {
     if (
       parent.paths == null ||
       (parent.paths.length === 0 && parent.path != null)
