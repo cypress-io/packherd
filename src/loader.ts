@@ -636,8 +636,28 @@ export class PackherdModuleLoader {
           const res = this.Module._resolveFilename(fullPath, parent, isMain)
           return res
         } catch (err2) {
-          console.error(err2)
-          return undefined
+          // In some cases like native addons which aren't included in the esbuild bundle we need to try to resolve
+          // relative to the project base dir
+          try {
+            const basedOnProjectRoot = path.resolve(
+              this.projectBaseDir,
+              moduleUri
+            )
+            const res = this.Module._resolveFilename(
+              basedOnProjectRoot,
+              parent,
+              isMain
+            )
+            logTrace(
+              'Resolved "%s" based on project root to "%s"',
+              moduleUri,
+              basedOnProjectRoot
+            )
+            return res
+          } catch (err3) {
+            console.error(err3)
+            return undefined
+          }
         }
       }
     }
