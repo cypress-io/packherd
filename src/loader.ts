@@ -317,15 +317,27 @@ export class PackherdModuleLoader {
     if (opts != null) {
       this._ensureParentPaths(opts)
     }
-    assert(
-      opts != null && (opts as NodeModule).id != null,
-      'Need a parent to resolve via Node.js'
-    )
+    if (
+      !path.isAbsolute(moduleUri) &&
+      (opts == null || (opts as NodeModule).id == null)
+    ) {
+      const err = new Error(
+        `Cannot resolve module '${moduleUri}'.` +
+          `Need a parent to resolve via Node.js when relative path is provided.`
+      )
+      // @ts-ignore replicating Node.js module not found error
+      err.code = 'MODULE_NOT_FOUND'
+      // @ts-ignore replicating Node.js module not found error
+      err.path = moduleUri
+      // @ts-ignore replicating Node.js module not found error
+      err.requestPath = moduleUri
+      throw err
+    }
     const directFullPath = fullPath
     let resolved: ModuleResolveResult['resolved']
     ;({ resolved, fullPath } = this._resolvePaths(
       moduleUri,
-      opts as NodeModule,
+      opts as NodeModule | undefined,
       false,
       directFullPath
     ))
@@ -491,7 +503,7 @@ export class PackherdModuleLoader {
 
   private _resolvePaths(
     moduleUri: string,
-    parent: NodeModule,
+    parent: NodeModule | undefined,
     isMain: boolean,
     directFullPath?: string
   ): ModuleResolveResult {
@@ -502,10 +514,6 @@ export class PackherdModuleLoader {
       parent,
       isMain
     )
-    if (fullPath == null) {
-      debugger
-    }
-    assert(fullPath != null, `packherd: unresolvable module ${moduleUri}`)
     return { resolved, fullPath }
   }
 
@@ -628,12 +636,11 @@ export class PackherdModuleLoader {
   // Helpers
   // -----------------
   private _tryResolveFilename(
-    moduleUri: string | undefined,
+    moduleUri: string,
     fullPath: string | undefined,
-    parent: NodeModule,
+    parent: NodeModule | undefined,
     isMain: boolean
   ) {
-    if (moduleUri == null) return undefined
     try {
       return this.Module._resolveFilename(moduleUri, parent, isMain)
     } catch (err) {
@@ -662,10 +669,12 @@ export class PackherdModuleLoader {
             )
             return res
           } catch (err3) {
-            console.error(err3)
-            return undefined
+            // Throwing original error on purpose
+            throw err
           }
         }
+      } else {
+        throw err
       }
     }
   }
