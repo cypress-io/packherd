@@ -6,7 +6,6 @@ import {
   ModuleDefinition,
   ModuleLoadResult,
   ModuleResolveResult,
-  ModuleMapper,
   ModuleNeedsReload,
 } from './types'
 import { Benchmark } from './benchmark'
@@ -38,7 +37,6 @@ export type ModuleLoaderOpts = {
   moduleDefinitions?: Record<string, ModuleDefinition>
   getModuleKey?: GetModuleKey
   moduleNeedsReload?: ModuleNeedsReload
-  moduleMapper?: ModuleMapper
 }
 
 const defaultGetModuleKey: GetModuleKey = ({ moduleUri, baseDir }) => {
@@ -129,14 +127,6 @@ class CacheTracker {
   }
 }
 
-function identity(
-  _mod: NodeModule,
-  moduleUri: string,
-  _projectBasedir: string
-) {
-  return moduleUri
-}
-
 function needsFullPathResolve(p: string) {
   return !path.isAbsolute(p) && p.startsWith('./')
 }
@@ -155,7 +145,6 @@ export class PackherdModuleLoader {
   private readonly moduleExports: Record<string, Module>
   private readonly moduleDefinitions: Record<string, ModuleDefinition>
   private readonly loading: LoadingModules
-  private readonly moduleMapper: ModuleMapper
   private readonly cacheTracker: CacheTracker
 
   constructor(
@@ -173,7 +162,6 @@ export class PackherdModuleLoader {
     )
     this.moduleExports = opts.moduleExports ?? {}
     this.moduleDefinitions = opts.moduleDefinitions ?? {}
-    this.moduleMapper = opts.moduleMapper ?? identity
     this.loading = new LoadingModules()
     this.cacheTracker = new CacheTracker(
       this.Module._cache,
@@ -507,14 +495,6 @@ export class PackherdModuleLoader {
     isMain: boolean,
     directFullPath?: string
   ): ModuleResolveResult {
-    if (1 + 1 !== 2) {
-      const mappedModuleUri = this.moduleMapper(
-        parent,
-        moduleUri,
-        this.projectBaseDir
-      )
-      console.log(mappedModuleUri)
-    }
     const resolved = 'module:node'
     const fullPath = this._tryResolveFilename(
       moduleUri,
