@@ -147,9 +147,9 @@ type CacheDirectResult = {
 }
 
 export class PackherdModuleLoader {
-  exportHits: number = 0
-  definitionHits: number = 0
-  misses: number = 0
+  exportHits: Set<string> = new Set()
+  definitionHits: Set<string> = new Set()
+  misses: Set<string> = new Set()
   private readonly diagnostics: boolean
   private readonly getModuleKey: GetModuleKey
   private readonly moduleExports: Record<string, Module>
@@ -190,10 +190,30 @@ export class PackherdModuleLoader {
     return this.cacheTracker.moduleNeedsReload(mod)
   }
 
-  registerModuleLoad(mod: NodeModule) {
+  registerModuleLoad(
+    mod: NodeModule,
+    loadedFrom:
+      | 'exports'
+      | 'definitions'
+      | 'Node.js require'
+      | 'Counted already'
+  ) {
     this._ensureFullPathExportsModule(mod)
-    this.cacheTracker.addLoaded(mod, 'cache', 'exports')
-    this.exportHits++
+    this.cacheTracker.addLoaded(mod, 'cache', loadedFrom)
+    switch (loadedFrom) {
+      case 'exports':
+        this.exportHits.add(mod.id)
+        break
+      case 'definitions':
+        this.definitionHits.add(mod.id)
+        break
+      case 'Node.js require':
+        this.misses.add(mod.id)
+        break
+      default:
+        // not counting loads from Node.js cache or the ones already counted via tryLoad
+        break
+    }
     this._dumpInfo()
   }
 
@@ -452,14 +472,15 @@ export class PackherdModuleLoader {
     // module itself from the cache to which it was added during load
     const nodeModule = this.Module._cache[fullPath]
 
-    this.misses++
     this._dumpInfo()
     this.benchmark.timeEnd(moduleUri, 'Module._load', this.loading.stack())
 
     const origin = 'Module._load'
     if (nodeModule != null) {
+      this.misses.add(nodeModule.id)
       this.cacheTracker.addLoaded(nodeModule, resolved, origin, moduleKey)
     } else {
+      this.misses.add(fullPath)
       this.cacheTracker.addLoadedById(fullPath)
     }
     return {
@@ -473,9 +494,9 @@ export class PackherdModuleLoader {
   private _dumpInfo() {
     if (this.diagnostics) {
       logDebug({
-        exportHits: this.exportHits,
-        definitionHits: this.definitionHits,
-        misses: this.misses,
+        exportHits: this.exportHits.size,
+        definitionHits: this.definitionHits.size,
+        misses: this.misses.size,
       })
     }
   }
@@ -543,7 +564,7 @@ export class PackherdModuleLoader {
     mod.exports = moduleExports
     mod.loaded = true
     const origin: ModuleLoadResult['origin'] = 'packherd:export'
-    this.exportHits++
+    this.exportHits.add(mod.id)
     return { mod, origin }
   }
 
@@ -570,7 +591,7 @@ export class PackherdModuleLoader {
         mod.require
       )
       mod.loaded = true
-      this.definitionHits++
+      this.definitionHits.add(mod.id)
       return { mod, origin }
     } catch (err) {
       logWarn(err.message)
