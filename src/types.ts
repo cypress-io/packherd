@@ -47,7 +47,7 @@ export type ModuleMapper = (
   projectBasedir: string
 ) => string
 
-export type ModuleBuildin = typeof import('module') & {
+export type ModuleBuiltin = typeof import('module') & {
   _resolveFilename(
     moduleUri: string,
     parent: NodeModule | undefined,

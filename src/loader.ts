@@ -2,7 +2,7 @@ import debug from 'debug'
 import Module from 'module'
 import path from 'path'
 import {
-  ModuleBuildin as ModuleBuiltin,
+  ModuleBuiltin as ModuleBuiltin,
   ModuleDefinition,
   ModuleLoadResult,
   ModuleResolveResult,
@@ -290,12 +290,7 @@ export class PackherdModuleLoader {
   }
 
   tryResolve(moduleUri: string, opts?: GetModuleKeyOpts): ModuleResolveResult {
-    // 1. If is full path we are done
-    if (path.isAbsolute(moduleUri)) {
-      return { fullPath: moduleUri, resolved: 'path' }
-    }
-
-    // 2. Resolve via module key
+    // 1. Resolve via module key
     let { moduleKey, moduleRelativePath } = this.getModuleKey({
       moduleUri,
       baseDir: this.projectBaseDir,
@@ -306,14 +301,14 @@ export class PackherdModuleLoader {
       return { fullPath: moduleKey, resolved: 'module-key:node' }
     }
 
-    // 3. Try to obtain a full path via the resolved relative path
+    // 2. Try to obtain a full path via the resolved relative path
     let fullPath = this._tryResolveFullPath(moduleUri, moduleRelativePath, opts)
 
     if (fullPath != null) {
       return { fullPath, resolved: 'module-fullpath:node' }
     }
 
-    // 4. Lastly try to resolve the module via Node.js resolution
+    // 3. Lastly try to resolve the module via Node.js resolution
     if (opts != null) {
       this._ensureParentPaths(opts)
     }
@@ -321,18 +316,12 @@ export class PackherdModuleLoader {
       !path.isAbsolute(moduleUri) &&
       (opts == null || (opts as NodeModule).id == null)
     ) {
-      const err = new Error(
+      const msg =
         `Cannot resolve module '${moduleUri}'.` +
-          `Need a parent to resolve via Node.js when relative path is provided.`
-      )
-      // @ts-ignore replicating Node.js module not found error
-      err.code = 'MODULE_NOT_FOUND'
-      // @ts-ignore replicating Node.js module not found error
-      err.path = moduleUri
-      // @ts-ignore replicating Node.js module not found error
-      err.requestPath = moduleUri
-      throw err
+        `Need a parent to resolve via Node.js when relative path is provided.`
+      throw moduleNotFoundError(msg, moduleUri)
     }
+
     const directFullPath = fullPath
     let resolved: ModuleResolveResult['resolved']
     ;({ resolved, fullPath } = this._resolvePaths(
@@ -346,7 +335,7 @@ export class PackherdModuleLoader {
 
   tryLoad(
     moduleUri: string,
-    parent: NodeModule,
+    parent: NodeModule | undefined,
     isMain: boolean
   ): ModuleLoadResult {
     // 1. Try to find moduleUri directly in Node.js module cache
@@ -364,12 +353,16 @@ export class PackherdModuleLoader {
       }
     }
 
+    let moduleKey: string | undefined
+    let moduleRelativePath: string | undefined
     // 2. Try to obtain a module key, this could be from a map or the relative path
-    let { moduleKey, moduleRelativePath } = this.getModuleKey({
-      moduleUri,
-      baseDir: this.projectBaseDir,
-      opts: parent,
-    })
+    if (parent != null) {
+      ;({ moduleKey, moduleRelativePath } = this.getModuleKey({
+        moduleUri,
+        baseDir: this.projectBaseDir,
+        opts: parent,
+      }))
+    }
 
     // 3. Try to see if the moduleKey was correct and can be loaded from the Node.js cache
     if (moduleKey != null && path.isAbsolute(moduleKey)) {
@@ -388,56 +381,55 @@ export class PackherdModuleLoader {
       }
     }
 
-    // 4. Try to obtain a full path
+    let fullPath: string | undefined
     if (parent != null) {
+      // 4. Try to obtain a full path
       this._ensureParentPaths(parent)
-    }
-    let fullPath = this._tryResolveFullPath(
-      moduleUri,
-      moduleRelativePath,
-      parent
-    )
+      fullPath =
+        this._tryResolveFullPath(moduleUri, moduleRelativePath, parent) ??
+        moduleUri
 
-    // 5. Try again in the Node.js module cache
-    if (fullPath != null && fullPath !== moduleUri) {
-      const moduleCached = this.Module._cache[fullPath]
-      if (moduleCached != null) {
-        const resolved = 'module-fullpath:node'
-        const origin = 'Module._cache'
-        this.cacheTracker.addLoaded(moduleCached, resolved, origin, moduleKey)
-        return {
-          resolved,
-          origin,
-          exports: moduleCached.exports,
-          fullPath,
+      // 5. Try again in the Node.js module cache
+      if (fullPath != null && fullPath !== moduleUri) {
+        const moduleCached = this.Module._cache[fullPath]
+        if (moduleCached != null) {
+          const resolved = 'module-fullpath:node'
+          const origin = 'Module._cache'
+          this.cacheTracker.addLoaded(moduleCached, resolved, origin, moduleKey)
+          return {
+            resolved,
+            origin,
+            exports: moduleCached.exports,
+            fullPath,
+          }
         }
       }
-    }
 
-    // 6. Try to locate this module inside the cache, either export or definition
-    let loadedModule = this._loadCacheDirect(
-      moduleUri,
-      moduleKey,
-      fullPath,
-      parent
-    )
-    if (loadedModule != null) {
-      this._dumpInfo()
-
-      this.cacheTracker.addLoaded(
-        loadedModule.mod,
-        loadedModule.resolved,
-        loadedModule.origin,
-        moduleKey
+      // 6. Try to locate this module inside the cache, either export or definition
+      let loadedModule = this._loadCacheDirect(
+        moduleUri,
+        moduleKey,
+        fullPath,
+        parent
       )
-      return loadedModule
+      if (loadedModule != null) {
+        this._dumpInfo()
+
+        this.cacheTracker.addLoaded(
+          loadedModule.mod,
+          loadedModule.resolved,
+          loadedModule.origin,
+          moduleKey
+        )
+        return loadedModule
+      }
     }
 
     // 7. Lastly try to resolve the module via Node.js resolution which requires expensive I/O and may fail
     //    in which case it throws an error
     this.benchmark.time(moduleUri)
 
-    const directFullPath = fullPath
+    const directFullPath = fullPath ?? moduleUri
     let resolved: ModuleResolveResult['resolved']
     ;({ resolved, fullPath } = this._resolvePaths(
       moduleUri,
@@ -449,7 +441,7 @@ export class PackherdModuleLoader {
     // 8. Something like './foo' might now have been resolved to './foo.js' and
     // thus we may find it inside our cache that way
     const derivedModuleKey = `./${path.relative(this.projectBaseDir, fullPath)}`
-    loadedModule = this._loadCacheDirect(
+    const loadedModule = this._loadCacheDirect(
       moduleUri,
       derivedModuleKey,
       fullPath,
@@ -684,8 +676,6 @@ export class PackherdModuleLoader {
     moduleRelativePath?: string,
     opts?: GetModuleKeyOpts
   ): string | undefined {
-    if (path.isAbsolute(moduleUri)) return moduleUri
-
     if (moduleRelativePath != null) {
       return path.resolve(this.projectBaseDir, moduleRelativePath)
     }
@@ -721,4 +711,16 @@ export class PackherdModuleLoader {
       parent.paths.push(path.join(dir, 'node_modules'))
     }
   }
+}
+
+function moduleNotFoundError(msg: string, moduleUri: string) {
+  // https://github.com/nodejs/node/blob/da0ede1ad55a502a25b4139f58aab3fb1ee3bf3f/lib/internal/modules/cjs/loader.js#L353-L359
+  const err = new Error(msg)
+  // @ts-ignore replicating Node.js module not found error
+  err.code = 'MODULE_NOT_FOUND'
+  // @ts-ignore replicating Node.js module not found error
+  err.path = moduleUri
+  // @ts-ignore replicating Node.js module not found error
+  err.requestPath = moduleUri
+  return err
 }
