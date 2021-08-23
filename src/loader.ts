@@ -141,6 +141,11 @@ export class PackherdModuleLoader {
   definitionHits: Set<string> = new Set()
   misses: Set<string> = new Set()
   private readonly diagnostics: boolean
+  private _dumpedInfo: {
+    exportHits: number
+    definitionHits: number
+    misses: number
+  }
   private readonly getModuleKey: GetModuleKey
   private readonly moduleExports: Record<string, Module>
   private readonly moduleDefinitions: Record<string, ModuleDefinition>
@@ -155,6 +160,7 @@ export class PackherdModuleLoader {
     opts: ModuleLoaderOpts
   ) {
     this.diagnostics = !!opts.diagnostics
+    this._dumpedInfo = { exportHits: 0, definitionHits: 0, misses: 0 }
     this.getModuleKey = opts.getModuleKey || defaultGetModuleKey
     assert(
       opts.moduleExports != null || opts.moduleDefinitions != null,
@@ -484,12 +490,28 @@ export class PackherdModuleLoader {
   }
 
   private _dumpInfo() {
-    if (this.diagnostics) {
-      logDebug({
-        exportHits: this.exportHits.size,
-        definitionHits: this.definitionHits.size,
-        misses: this.misses.size,
-      })
+    if (this.diagnostics && logDebug.enabled) {
+      const {
+        exportHits: prevExportHits,
+        definitionHits: prevDefinitionHits,
+        misses: prevMisses,
+      } = this._dumpedInfo
+
+      const exportHits = this.exportHits.size
+      const definitionHits = this.definitionHits.size
+      const misses = this.misses.size
+      if (
+        prevExportHits !== exportHits ||
+        prevDefinitionHits !== definitionHits ||
+        prevMisses !== misses
+      ) {
+        this._dumpedInfo = {
+          exportHits,
+          definitionHits,
+          misses,
+        }
+        logDebug(this._dumpedInfo)
+      }
     }
   }
 
