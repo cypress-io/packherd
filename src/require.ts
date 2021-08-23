@@ -157,7 +157,7 @@ export function packherdRequire(
 
       switch (origin) {
         case 'Module._load': {
-          logDebug(
+          logTrace(
             'Loaded "%s" via %s resolved as (%s | %s)',
             moduleUri,
             origin,
