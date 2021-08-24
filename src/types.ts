@@ -47,7 +47,7 @@ export type ModuleMapper = (
   projectBasedir: string
 ) => string
 
-export type ModuleBuildin = typeof import('module') & {
+export type ModuleBuiltin = typeof import('module') & {
   _resolveFilename(
     moduleUri: string,
     parent: NodeModule | undefined,
@@ -115,3 +115,12 @@ export type MapAndSourceContent = {
   map: SourceMapConsumer
   sourceContent: string
 }
+
+// -----------------
+// Module Resolution
+// -----------------
+export type ModuleNeedsReload = (
+  moduleId: string,
+  loadedModules: Set<string>,
+  moduleCache: Record<string, NodeModule>
+) => boolean

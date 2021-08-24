@@ -1,9 +1,17 @@
 import debug from 'debug'
 import { Benchmark, setupBenchmark } from './benchmark'
 import { DefaultTranspileCache } from './default-transpile-cache'
-import { ModuleLoaderOpts, PackherdModuleLoader } from './loader'
+import {
+  GetModuleKeyOpts,
+  ModuleLoaderOpts,
+  PackherdModuleLoader,
+} from './loader'
 import { installSourcemapSupport } from './sourcemap-support'
-import type { PackherdTranspileOpts, SourceMapLookup } from './types'
+import type {
+  ModuleNeedsReload,
+  PackherdTranspileOpts,
+  SourceMapLookup,
+} from './types'
 import path from 'path'
 
 const logInfo = debug('packherd:info')
@@ -16,6 +24,7 @@ export type PackherdRequireOpts = ModuleLoaderOpts & {
   requireStatsFile?: string
   transpileOpts?: Partial<PackherdTranspileOpts>
   sourceMapLookup?: SourceMapLookup
+  moduleNeedsReload?: ModuleNeedsReload
 }
 
 const DEFAULT_TRANSPILE_OPTS = {
@@ -148,7 +157,7 @@ export function packherdRequire(
 
       switch (origin) {
         case 'Module._load': {
-          logDebug(
+          logTrace(
             'Loaded "%s" via %s resolved as (%s | %s)',
             moduleUri,
             origin,
@@ -174,5 +183,12 @@ export function packherdRequire(
     }
   }
 
-  return { resolve: moduleLoader.tryResolve.bind(moduleLoader) }
+  return {
+    resolve(uri: string, opts?: GetModuleKeyOpts) {
+      return moduleLoader.tryResolve(uri, opts).fullPath
+    },
+    shouldBypassCache: moduleLoader.shouldBypassCache.bind(moduleLoader),
+    registerModuleLoad: moduleLoader.registerModuleLoad.bind(moduleLoader),
+    tryLoad: moduleLoader.tryLoad.bind(moduleLoader),
+  }
 }

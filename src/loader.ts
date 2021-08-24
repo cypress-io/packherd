@@ -2,11 +2,11 @@ import debug from 'debug'
 import Module from 'module'
 import path from 'path'
 import {
-  ModuleBuildin as ModuleBuiltin,
+  ModuleBuiltin as ModuleBuiltin,
   ModuleDefinition,
   ModuleLoadResult,
   ModuleResolveResult,
-  ModuleMapper,
+  ModuleNeedsReload,
 } from './types'
 import { Benchmark } from './benchmark'
 import { strict as assert } from 'assert'
@@ -22,6 +22,7 @@ export type GetModuleKeyOpts = {
   relFilename?: string
   relPath?: string
   fromSnapshot?: boolean
+  isResolve?: boolean
 }
 
 export type GetModuleKey = (opts: {
@@ -35,7 +36,7 @@ export type ModuleLoaderOpts = {
   moduleExports?: Record<string, Module>
   moduleDefinitions?: Record<string, ModuleDefinition>
   getModuleKey?: GetModuleKey
-  moduleMapper?: ModuleMapper
+  moduleNeedsReload?: ModuleNeedsReload
 }
 
 const defaultGetModuleKey: GetModuleKey = ({ moduleUri, baseDir }) => {
@@ -65,12 +66,69 @@ class LoadingModules {
   }
 }
 
-function identity(
-  _mod: NodeModule,
-  moduleUri: string,
-  _projectBasedir: string
+function defaultModuleNeedsReload(
+  moduleId: string,
+  loadedModules: Set<string>,
+  moduleCache: Record<string, NodeModule>
 ) {
-  return moduleUri
+  return loadedModules.has(moduleId) && moduleCache == null
+}
+
+class CacheTracker {
+  private readonly _loadedModules: Set<string> = new Set()
+  constructor(
+    private readonly _moduleCache: Record<string, NodeModule>,
+    private readonly _moduleExports: Record<string, Module>,
+    private readonly _moduleNeedsReload: ModuleNeedsReload
+  ) {}
+
+  addLoadedById(id: string) {
+    this._loadedModules.add(id)
+  }
+
+  addLoaded(
+    mod: NodeModule,
+    resolved: string,
+    origin: string,
+    moduleKey?: string
+  ) {
+    assert(
+      mod.id != null,
+      `Should have module id when loading by ${resolved} via ${origin} succeeded`
+    )
+    this._moduleCache[mod.id] = mod
+    if (moduleKey != null) {
+      this._moduleExports[moduleKey] = mod
+    }
+    this._loadedModules.add(mod.id)
+
+    if (logTrace.enabled) {
+      logTrace(
+        'Loaded "%s" (%s | %s) -> moduleCache: %d, exportsCache: %d, loaded: %d',
+        mod.id,
+        resolved,
+        origin,
+        Object.keys(this._moduleCache).length,
+        Object.keys(this._moduleExports).length,
+        this._loadedModules.size
+      )
+    }
+  }
+
+  moduleNeedsReload(mod: NodeModule) {
+    // We update our exports cache when loading a module, thus if it came from there
+    // and doesn't have one yet that means that it was never loaded before
+    if (mod.id == null) return false
+    return this._moduleNeedsReload(
+      mod.id,
+      this._loadedModules,
+      this._moduleCache
+    )
+  }
+}
+
+function needsFullPathResolve(p: string) {
+  return !path.isAbsolute(p) && p.startsWith('./')
 }
 
 type CacheDirectResult = {
@@ -79,15 +137,20 @@ type CacheDirectResult = {
 }
 
 export class PackherdModuleLoader {
-  exportHits: number = 0
-  definitionHits: number = 0
-  misses: number = 0
+  exportHits: Set<string> = new Set()
+  definitionHits: Set<string> = new Set()
+  misses: Set<string> = new Set()
   private readonly diagnostics: boolean
+  private _dumpedInfo: {
+    exportHits: number
+    definitionHits: number
+    misses: number
+  }
   private readonly getModuleKey: GetModuleKey
   private readonly moduleExports: Record<string, Module>
   private readonly moduleDefinitions: Record<string, ModuleDefinition>
   private readonly loading: LoadingModules
-  private readonly moduleMapper: ModuleMapper
+  private readonly cacheTracker: CacheTracker
 
   constructor(
     private readonly Module: ModuleBuiltin,
@@ -97,6 +160,7 @@ export class PackherdModuleLoader {
     opts: ModuleLoaderOpts
   ) {
     this.diagnostics = !!opts.diagnostics
+    this._dumpedInfo = { exportHits: 0, definitionHits: 0, misses: 0 }
     this.getModuleKey = opts.getModuleKey || defaultGetModuleKey
     assert(
       opts.moduleExports != null || opts.moduleDefinitions != null,
@@ -104,21 +168,75 @@ export class PackherdModuleLoader {
     )
     this.moduleExports = opts.moduleExports ?? {}
     this.moduleDefinitions = opts.moduleDefinitions ?? {}
-    this.moduleMapper = opts.moduleMapper ?? identity
     this.loading = new LoadingModules()
+    this.cacheTracker = new CacheTracker(
+      this.Module._cache,
+      this.moduleExports,
+      opts.moduleNeedsReload ?? defaultModuleNeedsReload
+    )
+  }
+
+  // -----------------
+  // Loading within Exports Cache
+  // -----------------
+  shouldBypassCache(mod: NodeModule) {
+    this._ensureFullPathExportsModule(mod)
+    return this.cacheTracker.moduleNeedsReload(mod)
+  }
+
+  registerModuleLoad(
+    mod: NodeModule,
+    loadedFrom:
+      | 'exports'
+      | 'definitions'
+      | 'Node.js require'
+      | 'Counted already'
+  ) {
+    this._ensureFullPathExportsModule(mod)
+    this.cacheTracker.addLoaded(mod, 'cache', loadedFrom)
+    switch (loadedFrom) {
+      case 'exports':
+        this.exportHits.add(mod.id)
+        break
+      case 'definitions':
+        this.definitionHits.add(mod.id)
+        break
+      case 'Node.js require':
+        this.misses.add(mod.id)
+        break
+      default:
+        // not counting loads from Node.js cache or the ones already counted via tryLoad
+        break
+    }
+    this._dumpInfo()
   }
 
   // -----------------
   // Cache Direct
   // -----------------
-  private _tryCacheDirect(moduleKey?: string): CacheDirectResult {
+  private _tryCacheDirect(
+    fullPath: string,
+    moduleKey?: string
+  ): CacheDirectResult {
     if (moduleKey == null) return {}
 
-    const moduleExport = this.moduleExports[moduleKey]?.exports
-    if (moduleExport != null)
-      return {
-        moduleExports: moduleExport,
+    const mod = this.moduleExports[moduleKey]
+
+    if (mod != null) {
+      mod.filename = fullPath
+      mod.id = fullPath
+      mod.path = path.dirname(fullPath)
+
+      if (mod.parent != null) {
+        this._ensureFullPathExportsModule(mod.parent)
       }
+      if (!this.cacheTracker.moduleNeedsReload(mod)) {
+        const moduleExport = mod.exports
+        return {
+          moduleExports: moduleExport,
+        }
+      }
+    }
 
     const definition = this.moduleDefinitions[moduleKey]
     return {
@@ -140,7 +258,7 @@ export class PackherdModuleLoader {
       'fullPath should be set when moduleKey was provided'
     )
 
-    const direct = this._tryCacheDirect(moduleKey)
+    const direct = this._tryCacheDirect(fullPath, moduleKey)
 
     if (direct?.moduleExports != null) {
       const { mod, origin } = this._initModuleFromExport(
@@ -178,12 +296,7 @@ export class PackherdModuleLoader {
   }
 
   tryResolve(moduleUri: string, opts?: GetModuleKeyOpts): ModuleResolveResult {
-    // 1. If is full path we are done
-    if (path.isAbsolute(moduleUri)) {
-      return { fullPath: moduleUri, resolved: 'path' }
-    }
-
-    // 2. Resolve via module key
+    // 1. Resolve via module key
     let { moduleKey, moduleRelativePath } = this.getModuleKey({
       moduleUri,
       baseDir: this.projectBaseDir,
@@ -194,23 +307,32 @@ export class PackherdModuleLoader {
       return { fullPath: moduleKey, resolved: 'module-key:node' }
     }
 
-    // 3. Try to obtain a full path via the resolved relative path
+    // 2. Try to obtain a full path via the resolved relative path
     let fullPath = this._tryResolveFullPath(moduleUri, moduleRelativePath, opts)
 
     if (fullPath != null) {
       return { fullPath, resolved: 'module-fullpath:node' }
     }
 
-    // 4. Lastly try to resolve the module via Node.js resolution
-    assert(
-      opts != null && (opts as NodeModule).id != null,
-      'Need a parent to resolve via Node.js'
-    )
+    // 3. Lastly try to resolve the module via Node.js resolution
+    if (opts != null) {
+      this._ensureParentPaths(opts)
+    }
+    if (
+      !path.isAbsolute(moduleUri) &&
+      (opts == null || (opts as NodeModule).id == null)
+    ) {
+      const msg =
+        `Cannot resolve module '${moduleUri}'.` +
+        `Need a parent to resolve via Node.js when relative path is provided.`
+      throw moduleNotFoundError(msg, moduleUri)
+    }
+
     const directFullPath = fullPath
     let resolved: ModuleResolveResult['resolved']
     ;({ resolved, fullPath } = this._resolvePaths(
       moduleUri,
-      opts as NodeModule,
+      opts as NodeModule | undefined,
       false,
       directFullPath
     ))
@@ -219,7 +341,7 @@ export class PackherdModuleLoader {
 
   tryLoad(
     moduleUri: string,
-    parent: NodeModule,
+    parent: NodeModule | undefined,
     isMain: boolean
   ): ModuleLoadResult {
     // 1. Try to find moduleUri directly in Node.js module cache
@@ -237,12 +359,16 @@ export class PackherdModuleLoader {
       }
     }
 
+    let moduleKey: string | undefined
+    let moduleRelativePath: string | undefined
     // 2. Try to obtain a module key, this could be from a map or the relative path
-    let { moduleKey, moduleRelativePath } = this.getModuleKey({
-      moduleUri,
-      baseDir: this.projectBaseDir,
-      opts: parent,
-    })
+    if (parent != null) {
+      ;({ moduleKey, moduleRelativePath } = this.getModuleKey({
+        moduleUri,
+        baseDir: this.projectBaseDir,
+        opts: parent,
+      }))
+    }
 
     // 3. Try to see if the moduleKey was correct and can be loaded from the Node.js cache
     if (moduleKey != null && path.isAbsolute(moduleKey)) {
@@ -251,7 +377,7 @@ export class PackherdModuleLoader {
         const fullPath = moduleKey
         const resolved = 'module-key:node'
         const origin = 'Module._cache'
-        this._updateCaches(moduleCached, resolved, origin, moduleKey)
+        this.cacheTracker.addLoaded(moduleCached, resolved, origin, moduleKey)
         return {
           resolved,
           origin,
@@ -261,52 +387,55 @@ export class PackherdModuleLoader {
       }
     }
 
-    // 4. Try to obtain a full path
-    let fullPath = this._tryResolveFullPath(
-      moduleUri,
-      moduleRelativePath,
-      parent
-    )
+    let fullPath: string | undefined
+    if (parent != null) {
+      // 4. Try to obtain a full path
+      this._ensureParentPaths(parent)
+      fullPath =
+        this._tryResolveFullPath(moduleUri, moduleRelativePath, parent) ??
+        moduleUri
 
-    // 5. Try again in the Node.js module cache
-    if (fullPath != null && fullPath !== moduleUri) {
-      const moduleCached = this.Module._cache[fullPath]
-      if (moduleCached != null) {
-        const resolved = 'module-fullpath:node'
-        const origin = 'Module._cache'
-        this._updateCaches(moduleCached, resolved, origin, moduleKey)
-        return {
-          resolved,
-          origin,
-          exports: moduleCached.exports,
-          fullPath,
+      // 5. Try again in the Node.js module cache
+      if (fullPath != null && fullPath !== moduleUri) {
+        const moduleCached = this.Module._cache[fullPath]
+        if (moduleCached != null) {
+          const resolved = 'module-fullpath:node'
+          const origin = 'Module._cache'
+          this.cacheTracker.addLoaded(moduleCached, resolved, origin, moduleKey)
+          return {
+            resolved,
+            origin,
+            exports: moduleCached.exports,
+            fullPath,
+          }
         }
       }
-    }
 
-    // 6. Try to locate this module inside the cache, either export or definition
-    let loadedModule = this._loadCacheDirect(
-      moduleUri,
-      moduleKey,
-      fullPath,
-      parent
-    )
-    if (loadedModule != null) {
-      this._dumpInfo()
-      this._updateCaches(
-        loadedModule.mod,
-        loadedModule.resolved,
-        loadedModule.origin,
-        moduleKey
+      // 6. Try to locate this module inside the cache, either export or definition
+      let loadedModule = this._loadCacheDirect(
+        moduleUri,
+        moduleKey,
+        fullPath,
+        parent
       )
-      return loadedModule
+      if (loadedModule != null) {
+        this._dumpInfo()
+
+        this.cacheTracker.addLoaded(
+          loadedModule.mod,
+          loadedModule.resolved,
+          loadedModule.origin,
+          moduleKey
+        )
+        return loadedModule
+      }
     }
 
     // 7. Lastly try to resolve the module via Node.js resolution which requires expensive I/O and may fail
     //    in which case it throws an error
     this.benchmark.time(moduleUri)
 
-    const directFullPath = fullPath
+    const directFullPath = fullPath ?? moduleUri
     let resolved: ModuleResolveResult['resolved']
     ;({ resolved, fullPath } = this._resolvePaths(
       moduleUri,
@@ -318,7 +447,7 @@ export class PackherdModuleLoader {
     // 8. Something like './foo' might now have been resolved to './foo.js' and
     // thus we may find it inside our cache that way
     const derivedModuleKey = `./${path.relative(this.projectBaseDir, fullPath)}`
-    loadedModule = this._loadCacheDirect(
+    const loadedModule = this._loadCacheDirect(
       moduleUri,
       derivedModuleKey,
       fullPath,
@@ -327,7 +456,7 @@ export class PackherdModuleLoader {
     if (loadedModule != null) {
       this._dumpInfo()
       loadedModule.resolved = 'cache:node'
-      this._updateCaches(
+      this.cacheTracker.addLoaded(
         loadedModule.mod,
         loadedModule.resolved,
         loadedModule.origin,
@@ -335,62 +464,70 @@ export class PackherdModuleLoader {
       )
       return loadedModule
     }
+
     const exports = this.origLoad(fullPath, parent, isMain)
-    this.misses++
+    // Node.js load only returns the `exports` object thus we need to get the
+    // module itself from the cache to which it was added during load
+    const nodeModule = this.Module._cache[fullPath]
+
     this._dumpInfo()
     this.benchmark.timeEnd(moduleUri, 'Module._load', this.loading.stack())
+
+    const origin = 'Module._load'
+    if (nodeModule != null) {
+      this.misses.add(nodeModule.id)
+      this.cacheTracker.addLoaded(nodeModule, resolved, origin, moduleKey)
+    } else {
+      this.misses.add(fullPath)
+      this.cacheTracker.addLoadedById(fullPath)
+    }
     return {
       resolved,
-      origin: 'Module._load',
+      origin,
       exports,
       fullPath,
     }
   }
 
   private _dumpInfo() {
-    if (this.diagnostics) {
-      logDebug({
-        exportHits: this.exportHits,
-        definitionHits: this.definitionHits,
-        misses: this.misses,
-      })
+    if (this.diagnostics && logDebug.enabled) {
+      const {
+        exportHits: prevExportHits,
+        definitionHits: prevDefinitionHits,
+        misses: prevMisses,
+      } = this._dumpedInfo
+
+      const exportHits = this.exportHits.size
+      const definitionHits = this.definitionHits.size
+      const misses = this.misses.size
+      if (
+        prevExportHits !== exportHits ||
+        prevDefinitionHits !== definitionHits ||
+        prevMisses !== misses
+      ) {
+        this._dumpedInfo = {
+          exportHits,
+          definitionHits,
+          misses,
+        }
+        logDebug(this._dumpedInfo)
+      }
     }
   }
 
-  private _updateCaches(
-    mod: NodeModule,
-    resolved: string,
-    origin: string,
-    moduleKey: string | undefined
-  ) {
-    assert(
-      mod.id != null,
-      `Should have module id when loading by ${resolved} via ${origin} succeeded`
-    )
-    this.Module._cache[mod.id] = mod
-    if (moduleKey != null) {
-      this.moduleExports[moduleKey] = mod
-    }
-  }
   private _resolvePaths(
     moduleUri: string,
-    parent: NodeModule,
+    parent: NodeModule | undefined,
     isMain: boolean,
     directFullPath?: string
   ): ModuleResolveResult {
-    const mappedModuleUri = this.moduleMapper(
-      parent,
-      moduleUri,
-      this.projectBaseDir
-    )
     const resolved = 'module:node'
     const fullPath = this._tryResolveFilename(
-      mappedModuleUri,
+      moduleUri,
       directFullPath,
       parent,
       isMain
     )
-    assert(fullPath != null, `packherd: unresolvable module ${moduleUri}`)
     return { resolved, fullPath }
   }
 
@@ -414,7 +551,7 @@ export class PackherdModuleLoader {
       parent,
       path: fullPath,
       // TODO(thlorenz): not entirely correct if parent is nested deeper or higher
-      paths: parent?.paths || [],
+      paths: parent?.paths ?? [],
       require,
     }
   }
@@ -429,7 +566,7 @@ export class PackherdModuleLoader {
     mod.exports = moduleExports
     mod.loaded = true
     const origin: ModuleLoadResult['origin'] = 'packherd:export'
-    this.exportHits++
+    this.exportHits.add(mod.id)
     return { mod, origin }
   }
 
@@ -456,7 +593,7 @@ export class PackherdModuleLoader {
         mod.require
       )
       mod.loaded = true
-      this.definitionHits++
+      this.definitionHits.add(mod.id)
       return { mod, origin }
     } catch (err) {
       logWarn(err.message)
@@ -484,7 +621,7 @@ export class PackherdModuleLoader {
       {
         paths(request: string) {
           if (Module.builtinModules.includes(request)) return null
-          return parent?.paths || null
+          return parent?.paths ?? null
         },
       }
     )
@@ -497,9 +634,9 @@ export class PackherdModuleLoader {
     parent?: NodeModule
   ): NodeRequire {
     const require = this._createRequire(fullPath, moduleUri, parent)
-    const override = (id: string) => {
+    const override = function (this: NodeModule, id: string) {
       logTrace('Module "%s" is requiring "%s"', moduleUri, id)
-      return require(id)
+      return require.call(this, id)
     }
     override.main = require.main
     override.cache = require.cache
@@ -513,12 +650,11 @@ export class PackherdModuleLoader {
   // Helpers
   // -----------------
   private _tryResolveFilename(
-    moduleUri: string | undefined,
+    moduleUri: string,
     fullPath: string | undefined,
-    parent: NodeModule,
+    parent: NodeModule | undefined,
     isMain: boolean
   ) {
-    if (moduleUri == null) return undefined
     try {
       return this.Module._resolveFilename(moduleUri, parent, isMain)
     } catch (err) {
@@ -528,9 +664,31 @@ export class PackherdModuleLoader {
           const res = this.Module._resolveFilename(fullPath, parent, isMain)
           return res
         } catch (err2) {
-          console.error(err2)
-          return undefined
+          // In some cases like native addons which aren't included in the esbuild bundle we need to try to resolve
+          // relative to the project base dir
+          try {
+            const basedOnProjectRoot = path.resolve(
+              this.projectBaseDir,
+              moduleUri
+            )
+            const res = this.Module._resolveFilename(
+              basedOnProjectRoot,
+              parent,
+              isMain
+            )
+            logTrace(
+              'Resolved "%s" based on project root to "%s"',
+              moduleUri,
+              basedOnProjectRoot
+            )
+            return res
+          } catch (err3) {
+            // Throwing original error on purpose
+            throw err
+          }
         }
+      } else {
+        throw err
       }
     }
   }
@@ -540,8 +698,6 @@ export class PackherdModuleLoader {
     moduleRelativePath?: string,
     opts?: GetModuleKeyOpts
   ): string | undefined {
-    if (path.isAbsolute(moduleUri)) return moduleUri
-
     if (moduleRelativePath != null) {
       return path.resolve(this.projectBaseDir, moduleRelativePath)
     }
@@ -549,4 +705,44 @@ export class PackherdModuleLoader {
       return path.resolve(opts.path, moduleUri)
     }
   }
+
+  private _ensureFullPathExportsModule(mod: NodeModule) {
+    if (mod.id == null) mod.id = mod.filename
+    if (mod.id != null && needsFullPathResolve(mod.id)) {
+      mod.id = path.resolve(this.projectBaseDir, mod.id)
+    }
+    if (mod.filename != null && needsFullPathResolve(mod.filename)) {
+      mod.filename = path.resolve(this.projectBaseDir, mod.filename)
+    }
+    if (mod.path != null && needsFullPathResolve(mod.path)) {
+      mod.path = path.resolve(this.projectBaseDir, mod.path)
+    }
+  }
+
+  private _ensureParentPaths(parent: { path: string; paths?: string[] }) {
+    if (
+      parent.paths == null ||
+      (parent.paths.length === 0 && parent.path != null)
+    ) {
+      let dir = path.resolve(this.projectBaseDir, parent.path)
+      parent.paths = []
+      while (dir.length > this.projectBaseDir.length) {
+        parent.paths.push(path.join(dir, 'node_modules'))
+        dir = path.dirname(dir)
+      }
+      parent.paths.push(path.join(dir, 'node_modules'))
+    }
+  }
+}
+
+function moduleNotFoundError(msg: string, moduleUri: string) {
+  // https://github.com/nodejs/node/blob/da0ede1ad55a502a25b4139f58aab3fb1ee3bf3f/lib/internal/modules/cjs/loader.js#L353-L359
+  const err = new Error(msg)
+  // @ts-ignore replicating Node.js module not found error
+  err.code = 'MODULE_NOT_FOUND'
+  // @ts-ignore replicating Node.js module not found error
+  err.path = moduleUri
+  // @ts-ignore replicating Node.js module not found error
+  err.requestPath = moduleUri
+  return err
 }
