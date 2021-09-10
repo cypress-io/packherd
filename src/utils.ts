@@ -31,3 +31,11 @@ export function tmpFilePaths() {
 
   return { outfile }
 }
+
+export const forwardToNativeSlash =
+  path.sep === path.posix.sep
+    ? (p: string) => p
+    : (p: string) =>
+        // Operating on the path will cause Node.js to _fix_ the slash used to be native
+        // to any wannabe operation system it is running on which doesn't use '/'
+        path.join(path.dirname(p), path.basename(p))
