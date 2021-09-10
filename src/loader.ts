@@ -2,7 +2,7 @@ import debug from 'debug'
 import Module from 'module'
 import path from 'path'
 import {
-  ModuleBuiltin as ModuleBuiltin,
+  ModuleBuiltin,
   ModuleDefinition,
   ModuleLoadResult,
   ModuleResolveResult,
@@ -10,6 +10,7 @@ import {
 } from './types'
 import { Benchmark } from './benchmark'
 import { strict as assert } from 'assert'
+import { forwardToNativeSlash } from './utils'
 
 const logDebug = debug('packherd:debug')
 const logTrace = debug('packherd:trace')
@@ -346,7 +347,7 @@ export class PackherdModuleLoader {
   ): ModuleLoadResult {
     // 1. Try to find moduleUri directly in Node.js module cache
     if (path.isAbsolute(moduleUri)) {
-      const moduleCached: NodeModule = this.Module._cache[moduleUri]
+      const moduleCached: NodeModule = this._fromModuleCache(moduleUri)
       if (moduleCached != null) {
         const fullPath = moduleUri
         const resolved = 'module-uri:node'
@@ -372,7 +373,7 @@ export class PackherdModuleLoader {
 
     // 3. Try to see if the moduleKey was correct and can be loaded from the Node.js cache
     if (moduleKey != null && path.isAbsolute(moduleKey)) {
-      const moduleCached = this.Module._cache[moduleKey]
+      const moduleCached = this._fromModuleCache(moduleKey)
       if (moduleCached != null) {
         const fullPath = moduleKey
         const resolved = 'module-key:node'
@@ -397,7 +398,7 @@ export class PackherdModuleLoader {
 
       // 5. Try again in the Node.js module cache
       if (fullPath != null && fullPath !== moduleUri) {
-        const moduleCached = this.Module._cache[fullPath]
+        const moduleCached = this._fromModuleCache(fullPath)
         if (moduleCached != null) {
           const resolved = 'module-fullpath:node'
           const origin = 'Module._cache'
@@ -468,7 +469,7 @@ export class PackherdModuleLoader {
     const exports = this.origLoad(fullPath, parent, isMain)
     // Node.js load only returns the `exports` object thus we need to get the
     // module itself from the cache to which it was added during load
-    const nodeModule = this.Module._cache[fullPath]
+    const nodeModule = this._fromModuleCache(fullPath)
 
     this._dumpInfo()
     this.benchmark.timeEnd(moduleUri, 'Module._load', this.loading.stack())
@@ -487,6 +488,11 @@ export class PackherdModuleLoader {
       exports,
       fullPath,
     }
+  }
+
+  private _fromModuleCache(p: string) {
+    const nodejsCacheKey = forwardToNativeSlash(p)
+    return this.Module._cache[nodejsCacheKey]
   }
 
   private _dumpInfo() {
