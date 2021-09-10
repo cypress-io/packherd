@@ -76,9 +76,12 @@ function defaultModuleNeedsReload(
 }
 
 class CacheTracker {
+  // Key format matches @see _moduleCache, aka native slashed
   private readonly _loadedModules: Set<string> = new Set()
   constructor(
+    // Node.js Module._cache with native slashed keys, i.e. using backslash on windows
     private readonly _moduleCache: Record<string, NodeModule>,
+    // Provided exports cache with keys always using forward slash
     private readonly _moduleExports: Record<string, Module>,
     private readonly _moduleNeedsReload: ModuleNeedsReload
   ) {}
@@ -93,14 +96,19 @@ class CacheTracker {
     origin: string,
     moduleKey?: string
   ) {
+    // TODO(slash): need to guarantee that mod.id is native slashed
+    // see: _ensureFullPathExportsModule
     assert(
       mod.id != null,
       `Should have module id when loading by ${resolved} via ${origin} succeeded`
     )
     this._moduleCache[mod.id] = mod
+    // TODO(slash): need to ensure moduleKey is forward slashed
     if (moduleKey != null) {
       this._moduleExports[moduleKey] = mod
     }
+
+    // TODO(slash): need to guarantee that mod.id is native slashed
     this._loadedModules.add(mod.id)
 
     if (logTrace.enabled) {
@@ -120,6 +128,7 @@ class CacheTracker {
     // We update our exports cache when loading a module, thus if it came from there
     // and doesn't have one yet that means that it was never loaded before
     if (mod.id == null) return false
+    // TODO(slash): need to guarantee that mod.id is native slashed
     return this._moduleNeedsReload(
       mod.id,
       this._loadedModules,
@@ -298,6 +307,7 @@ export class PackherdModuleLoader {
 
   tryResolve(moduleUri: string, opts?: GetModuleKeyOpts): ModuleResolveResult {
     // 1. Resolve via module key
+    // NOTE: getModuleKey (v8-snapshot) maintains forward slashes by using posix version of path module
     let { moduleKey, moduleRelativePath } = this.getModuleKey({
       moduleUri,
       baseDir: this.projectBaseDir,
@@ -364,6 +374,7 @@ export class PackherdModuleLoader {
     let moduleRelativePath: string | undefined
     // 2. Try to obtain a module key, this could be from a map or the relative path
     if (parent != null) {
+      // NOTE: getModuleKey (v8-snapshot) maintains forward slashes by using posix version of path module
       ;({ moduleKey, moduleRelativePath } = this.getModuleKey({
         moduleUri,
         baseDir: this.projectBaseDir,
@@ -704,6 +715,8 @@ export class PackherdModuleLoader {
     moduleRelativePath?: string,
     opts?: GetModuleKeyOpts
   ): string | undefined {
+    // Since we call path.resolve here it doesn't matter if
+    // `moduleRelativePath` is native slashed or not
     if (moduleRelativePath != null) {
       return path.resolve(this.projectBaseDir, moduleRelativePath)
     }
@@ -713,6 +726,7 @@ export class PackherdModuleLoader {
   }
 
   private _ensureFullPathExportsModule(mod: NodeModule) {
+    // TODO(slash): verify that we enforce native slash in all needed cases here
     if (mod.id == null) mod.id = mod.filename
     if (mod.id != null && needsFullPathResolve(mod.id)) {
       mod.id = path.resolve(this.projectBaseDir, mod.id)
