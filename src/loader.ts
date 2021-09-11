@@ -96,6 +96,8 @@ class CacheTracker {
     origin: string,
     moduleKey?: string
   ) {
+    logSilly('addloaded: mod.id: %s, moduleKey: %s', mod.id, moduleKey)
+
     // TODO(slash): need to guarantee that mod.id is native slashed
     // see: _ensureFullPathExportsModule
     assert(
@@ -355,6 +357,8 @@ export class PackherdModuleLoader {
     parent: NodeModule | undefined,
     isMain: boolean
   ): ModuleLoadResult {
+    logSilly('tryload: // 1. moduleUri: %s', moduleUri)
+
     // 1. Try to find moduleUri directly in Node.js module cache
     if (path.isAbsolute(moduleUri)) {
       const moduleCached: NodeModule = this._fromModuleCache(moduleUri)
@@ -380,11 +384,18 @@ export class PackherdModuleLoader {
         baseDir: this.projectBaseDir,
         opts: parent,
       }))
+      logSilly(
+        'tryload: // 2. moduleKey: %s, moduleRelativePath: %s',
+        moduleKey,
+        moduleRelativePath
+      )
     }
 
     // 3. Try to see if the moduleKey was correct and can be loaded from the Node.js cache
     if (moduleKey != null && path.isAbsolute(moduleKey)) {
       const moduleCached = this._fromModuleCache(moduleKey)
+      logSilly('tryload: // 3. moduleKey: %s', moduleKey)
+
       if (moduleCached != null) {
         const fullPath = moduleKey
         const resolved = 'module-key:node'
@@ -406,6 +417,8 @@ export class PackherdModuleLoader {
       fullPath =
         this._tryResolveFullPath(moduleUri, moduleRelativePath, parent) ??
         moduleUri
+
+      logSilly('tryload: // 4. fullPath: %s', fullPath)
 
       // 5. Try again in the Node.js module cache
       if (fullPath != null && fullPath !== moduleUri) {
@@ -455,6 +468,7 @@ export class PackherdModuleLoader {
       isMain,
       directFullPath
     ))
+    logSilly('tryload: // 7. fullPath: %s', fullPath)
 
     // 8. Something like './foo' might now have been resolved to './foo.js' and
     // thus we may find it inside our cache that way
