@@ -8,6 +8,7 @@ import {
 } from './loader'
 import { installSourcemapSupport } from './sourcemap-support'
 import type {
+  ModuleLoadResult,
   ModuleNeedsReload,
   PackherdTranspileOpts,
   SourceMapLookup,
@@ -34,7 +35,23 @@ const DEFAULT_TRANSPILE_OPTS = {
 export function packherdRequire(
   projectBaseDir: string,
   opts: PackherdRequireOpts
-) {
+): {
+  resolve: (uri: string, opts?: GetModuleKeyOpts) => string
+  shouldBypassCache?: (mod: NodeModule) => boolean
+  registerModuleLoad?: (
+    mod: NodeModule,
+    loadedFrom:
+      | 'exports'
+      | 'definitions'
+      | 'Node.js require'
+      | 'Counted already'
+  ) => void
+  tryLoad?: (
+    moduleUri: string,
+    parent: NodeModule | undefined,
+    isMain: boolean
+  ) => ModuleLoadResult
+} {
   const Module = require('module')
 
   const { supportTS, initTranspileCache, tsconfig } = Object.assign(
@@ -90,7 +107,10 @@ export function packherdRequire(
     logInfo(
       'No moduleExports nor moduleDefinitions provided, not hooking Module._load'
     )
-    return { resolve: require.resolve.bind(require) }
+    return {
+      resolve: (id: string, opts?: GetModuleKeyOpts) =>
+        require.resolve(id, opts as Parameters<RequireResolve>[1]),
+    }
   }
 
   const benchmark: Benchmark = setupBenchmark(

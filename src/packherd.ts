@@ -4,6 +4,7 @@ import { createBundle as defaultCreateBundle } from './create-bundle'
 import { EntryGenerator, PathsMapper } from './generate-entry'
 import { tmpFilePaths } from './utils'
 import { CreateBundle } from './types'
+import type { Message, Metafile } from 'esbuild'
 
 export { packherdRequire, PackherdRequireOpts, GetModuleKey } from './require'
 export * from './types'
@@ -16,7 +17,14 @@ export type PackherdOpts = {
   createBundle?: CreateBundle
 }
 
-export async function packherd(opts: PackherdOpts) {
+export async function packherd(
+  opts: PackherdOpts
+): Promise<{
+  bundle: Buffer
+  sourceMap: Buffer | undefined
+  meta: Metafile
+  warnings: Message[]
+}> {
   const createBundle = opts.createBundle || defaultCreateBundle
   const entryGenerator = new EntryGenerator(
     createBundle,
