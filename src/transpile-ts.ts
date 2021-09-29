@@ -59,10 +59,66 @@ export function transpileTsCode(
     sourcefile: fullModuleUri,
   })
   const result = transformSync(ts, opts)
-  if (cache != null) {
-    cache.add(fullModuleUri, result.code)
+  let code = result.code
+    .replace(/var __toModule/, 'var __orig_toModule')
+    .replace(/var __export/, 'var __orig__export')
+
+  code = `${code}
+function __export(target, fns) {
+  for (const key in fns) {
+    try {
+      target[key] = fns[key]
+    } catch (err) {
+      debugger
+    }
   }
-  return result.code
+}
+
+for (const key in exports) {
+  const fn = exports[key]
+  if (typeof fn === 'function') {
+    exports[key] = fn()
+  } else {
+    exports[key] = fn
+  }
+}
+
+function reExport(target, mdl) {
+  if ((mdl && typeof mdl === 'object') || typeof mdl === 'function') {
+    for (let key of __getOwnPropNames(mdl))
+      if (!__hasOwnProp.call(target, key) && key !== 'default') {
+        __defProp(target, key, {
+          get: () => mdl[key],
+          enumerable: !(desc = __getOwnPropDesc(mdl, key)) || desc.enumerable,
+        })
+      }
+  }
+  return target
+}
+
+function __toModule(mdl) {
+  const def = mdl != null ? mdl : {}
+  if (!('default' in def)) {
+    def.default = mdl
+  }
+  const marked = def.__esModule ? def : __markAsModule(def)
+
+  const reExported = reExport(marked, mdl)
+  return reExported
+}
+`
+  if (cache != null) {
+    cache.add(fullModuleUri, code)
+  }
+
+  return code
+}
+
+// @ts-ignore
+function makeStubable() {
+  for (const key of exports) {
+    exports[key] = exports[key]
+  }
 }
 
 export function hookTranspileTs(
