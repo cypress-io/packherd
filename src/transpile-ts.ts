@@ -3,6 +3,7 @@ import { TransformOptions, transformSync } from 'esbuild'
 import type { TranspileCache, SourceMapLookup } from './types'
 import path from 'path'
 import { installSourcemapSupport } from './sourcemap-support'
+import { rewriteExports } from './transpile-ts-rewrite'
 
 type EnhancedModule = NodeModule & {
   _extensions: Record<string, (mod: EnhancedModule, filename: string) => void>
@@ -41,10 +42,11 @@ function transpileTsCode(
   const result = transformSync(ts, opts)
 
   // Add to Cache
+  const code = rewriteExports(result.code)
   if (cache != null) {
-    cache.add(fullModuleUri, result.code)
+    cache.add(fullModuleUri, code)
   }
-  return result.code
+  return code
 }
 
 /**
