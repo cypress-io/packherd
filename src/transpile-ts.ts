@@ -60,6 +60,22 @@ export function transpileTsCode(
   })
   const result = transformSync(ts, opts)
   let code = result.code
+
+  // __export(exports, {
+  const exportResolution = /__export\(exports,/.test(code)
+    ? `
+for (const key in exports) {
+  const fn = exports[key]
+  if (typeof fn === 'function') {
+    exports[key] = fn()
+  } else {
+    exports[key] = fn
+  }
+}
+`
+    : ''
+
+  code = code
     .replace(/var __toModule/, 'var __orig_toModule')
     .replace(/var __export/, 'var __orig__export')
 
@@ -73,15 +89,7 @@ function __export(target, fns) {
     }
   }
 }
-
-for (const key in exports) {
-  const fn = exports[key]
-  if (typeof fn === 'function') {
-    exports[key] = fn()
-  } else {
-    exports[key] = fn
-  }
-}
+${exportResolution}
 
 function reExport(target, mdl) {
   if ((mdl && typeof mdl === 'object') || typeof mdl === 'function') {
