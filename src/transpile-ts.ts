@@ -4,6 +4,7 @@ import type { TranspileCache, SourceMapLookup } from './types'
 import fs from 'fs'
 import path from 'path'
 import { installSourcemapSupport } from './sourcemap-support'
+import { rewriteExports } from './transpile-ts-rewrite'
 
 type EnhancedModule = NodeModule & {
   _extensions: Record<string, (mod: EnhancedModule, filename: string) => void>
@@ -59,10 +60,11 @@ export function transpileTsCode(
     sourcefile: fullModuleUri,
   })
   const result = transformSync(ts, opts)
+  const code = rewriteExports(result.code)
   if (cache != null) {
-    cache.add(fullModuleUri, result.code)
+    cache.add(fullModuleUri, code)
   }
-  return result.code
+  return code
 }
 
 export function hookTranspileTs(
