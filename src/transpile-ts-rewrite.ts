@@ -6,9 +6,7 @@ const exportAssignRx = /([^:]+): ?\(\) ?=> ?([^,]+),?$/
 
 export function rewriteExports(code: string): string {
   const lines = code.split('\n')
-  const exportProps: Record<string, string> = {
-    __esModule: 'true',
-  }
+  const exportProps: Record<string, string> = {}
 
   let startIdx = 0
   while (!exportStartRx.test(lines[startIdx]) && startIdx < lines.length)
@@ -25,19 +23,35 @@ export function rewriteExports(code: string): string {
   }
 
   const adaptedLines = lines.slice(0, startIdx)
+
+  // -----------------
+  // module.exports resolve function
+  // -----------------
+  // Ensure we include the exports rewrite in the same location in order to not
+  // invalidate sourcemaps
+  const exportPropsStr = Object.entries(exportProps).map(
+    ([key, val]) => `${key}: ${val}`
+  )
+  adaptedLines.push('const __getModuleExports = () => ({ __esModule: true,')
+  for (const exp of exportPropsStr) {
+    adaptedLines.push(`${exp},`)
+  }
+  adaptedLines.push('})')
+
+  // -----------------
+  // User code
+  // -----------------
   for (let j = endIdx + 1; j < lines.length; j++) {
     adaptedLines.push(lines[j])
   }
 
-  const exportPropsStr = Object.entries(exportProps)
-    .map(([key, val]) => `${key}: ${val}`)
-    .join(',\n  ')
-
-  let adaptedCode = `${adaptedLines.join('\n')}
-module.exports = {
-  ${exportPropsStr}
-}
-`.replace(/var __toModule/, 'var __orig_toModule')
+  // We have to resolve module.exports at the bottom to make sure all props resolved in
+  // it have been defined at this point
+  const adaptedTop = adaptedLines.join('\n')
+  let adaptedCode = `${adaptedTop};module.exports = __getModuleExports()`.replace(
+    /var __toModule/,
+    'var __orig_toModule'
+  )
 
   return `${adaptedCode}
 function __toModule(mdl) {
