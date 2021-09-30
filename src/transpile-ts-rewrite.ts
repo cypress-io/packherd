@@ -9,49 +9,63 @@ export function rewriteExports(code: string): string {
   const exportProps: Record<string, string> = {}
 
   let startIdx = 0
-  while (!exportStartRx.test(lines[startIdx]) && startIdx < lines.length)
+  while (!exportStartRx.test(lines[startIdx]) && startIdx < lines.length) {
     startIdx++
-  if (startIdx == lines.length) return code
-
-  let endIdx
-  for (endIdx = startIdx + 1; endIdx < lines.length; endIdx++) {
-    const line = lines[endIdx]
-    if (exportEndRx.test(line)) break
-    const match = line.match(exportAssignRx)
-    assert(match != null, `${line} should have contained an export assignment`)
-    exportProps[match[1]] = match[2]
   }
 
-  const adaptedLines = lines.slice(0, startIdx)
+  let adaptedLines
+  // some modules, like tests have not exports
+  let replacingExports = startIdx < lines.length
+  if (replacingExports) {
+    let endIdx
+    for (endIdx = startIdx + 1; endIdx < lines.length; endIdx++) {
+      const line = lines[endIdx]
+      if (exportEndRx.test(line)) break
+      const match = line.match(exportAssignRx)
+      assert(
+        match != null,
+        `${line} should have contained an export assignment`
+      )
+      exportProps[match[1]] = match[2]
+    }
 
-  // -----------------
-  // module.exports resolve function
-  // -----------------
-  // Ensure we include the exports rewrite in the same location in order to not
-  // invalidate sourcemaps
-  const exportPropsStr = Object.entries(exportProps).map(
-    ([key, val]) => `${key}: ${val}`
-  )
-  adaptedLines.push('const __getModuleExports = () => ({ __esModule: true,')
-  for (const exp of exportPropsStr) {
-    adaptedLines.push(`${exp},`)
-  }
-  adaptedLines.push('})')
+    adaptedLines = lines.slice(0, startIdx)
 
-  // -----------------
-  // User code
-  // -----------------
-  for (let j = endIdx + 1; j < lines.length; j++) {
-    adaptedLines.push(lines[j])
+    // -----------------
+    // module.exports resolve function
+    // -----------------
+    // Ensure we include the exports rewrite in the same location in order to not
+    // invalidate sourcemaps
+    const exportPropsStr = Object.entries(exportProps).map(
+      ([key, val]) => `${key}: ${val}`
+    )
+    adaptedLines.push('const __getModuleExports = () => ({ __esModule: true,')
+    for (const exp of exportPropsStr) {
+      adaptedLines.push(`${exp},`)
+    }
+    adaptedLines.push('})')
+
+    // -----------------
+    // User code
+    // -----------------
+    for (let j = endIdx + 1; j < lines.length; j++) {
+      adaptedLines.push(lines[j])
+    }
+  } else {
+    // no exports, thus we leave the code up to here unchanged
+    adaptedLines = lines
   }
+
+  const adaptedTop = adaptedLines.join('\n')
 
   // We have to resolve module.exports at the bottom to make sure all props resolved in
   // it have been defined at this point
-  const adaptedTop = adaptedLines.join('\n')
-  let adaptedCode = `${adaptedTop};module.exports = __getModuleExports()`.replace(
-    /var __toModule/,
-    'var __orig_toModule'
+  let adaptedCode = (replacingExports
+    ? `${adaptedTop};module.exports = __getModuleExports()`
+    : adaptedTop
   )
+    // TODO: would be more efficient to perform the replace on the particular line
+    .replace(/var __toModule/, 'var __orig_toModule')
 
   return `${adaptedCode}
 function __toModule(mdl) {
@@ -74,15 +88,3 @@ function __toModule(mdl) {
 }
 `
 }
-
-/*
-function _scratch() {
-  __defProp(
-    mdl != null ? __create(__getProtoOf(mdl)) : {},
-    'default',
-    mdl && mdl.__esModule && 'default' in mdl
-      ? { get: () => mdl.default, enumerable: true }
-      : { value: mdl, enumerable: true }
-  )
-}
-*/
