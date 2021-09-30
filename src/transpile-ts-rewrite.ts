@@ -6,7 +6,9 @@ const exportAssignRx = /([^:]+): ?\(\) ?=> ?([^,]+),?$/
 
 export function rewriteExports(code: string): string {
   const lines = code.split('\n')
-  const exportProps: Record<string, string> = {}
+  const exportProps: Record<string, string> = {
+    __esModule: 'true',
+  }
 
   let startIdx = 0
   while (!exportStartRx.test(lines[startIdx]) && startIdx < lines.length)
@@ -30,9 +32,43 @@ export function rewriteExports(code: string): string {
   const exportPropsStr = Object.entries(exportProps)
     .map(([key, val]) => `${key}: ${val}`)
     .join(',\n  ')
-  return `${adaptedLines.join('\n')}
+
+  let adaptedCode = `${adaptedLines.join('\n')}
 module.exports = {
   ${exportPropsStr}
 }
+`.replace(/var __toModule/, 'var __orig_toModule')
+
+  return `${adaptedCode}
+function __toModule(mdl) {
+  const target = mdl ?? {}
+  if (!('default' in target)) {
+    __defProp(
+      target,
+      'default',
+      mdl && mdl.__esModule && 'default' in mdl
+        ? { get: () => target.default,
+            set: (val) => target.default = val,
+            enumerable: true }
+        : { value: mdl, 
+            writable: true,
+            enumerable: true }
+    )
+  }
+  __markAsModule(target)
+  return target
+}
 `
 }
+
+/*
+function _scratch() {
+  __defProp(
+    mdl != null ? __create(__getProtoOf(mdl)) : {},
+    'default',
+    mdl && mdl.__esModule && 'default' in mdl
+      ? { get: () => mdl.default, enumerable: true }
+      : { value: mdl, enumerable: true }
+  )
+}
+*/
