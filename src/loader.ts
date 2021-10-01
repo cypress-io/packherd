@@ -342,7 +342,9 @@ export class PackherdModuleLoader {
       mod.id = fullPath
       mod.path = path.dirname(fullPath)
 
+      // @ts-ignore parent deprecated
       if (mod.parent != null) {
+        // @ts-ignore parent deprecated
         this._ensureFullPathExportsModule(mod.parent)
       }
       // Ensure that we are actually OK returning the already instantiated version
