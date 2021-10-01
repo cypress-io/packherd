@@ -227,7 +227,9 @@ export class PackherdModuleLoader {
       mod.id = fullPath
       mod.path = path.dirname(fullPath)
 
+      // @ts-ignore parent deprecated
       if (mod.parent != null) {
+        // @ts-ignore parent deprecated
         this._ensureFullPathExportsModule(mod.parent)
       }
       if (!this.cacheTracker.moduleNeedsReload(mod)) {
@@ -595,7 +597,7 @@ export class PackherdModuleLoader {
       mod.loaded = true
       this.definitionHits.add(mod.id)
       return { mod, origin }
-    } catch (err) {
+    } catch (err: any) {
       logWarn(err.message)
       logSilly(err)
       return { mod: undefined, origin }
