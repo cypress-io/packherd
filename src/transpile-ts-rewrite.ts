@@ -6,7 +6,7 @@ const exportAssignRx = /([^:]+): ?\(\) ?=> ?([^,]+),?$/
 
 export function rewriteExports(code: string): string {
   const lines = code.split('\n')
-  const exportProps: Record<string, string> = {}
+  const exportProps: Record<string, string> = { __esModule: 'true' }
 
   let startIdx = 0
   while (!exportStartRx.test(lines[startIdx]) && startIdx < lines.length) {
@@ -32,18 +32,27 @@ export function rewriteExports(code: string): string {
     adaptedLines = lines.slice(0, startIdx)
 
     // -----------------
-    // module.exports resolve function
+    // module.exports preparation
     // -----------------
-    // Ensure we include the exports rewrite in the same location in order to not
-    // invalidate sourcemaps
-    const exportPropsStr = Object.entries(exportProps).map(
+    // We include the exported properties as `getters` on top of imports in order to
+    // facilitate early access due to circular imports
+    const exportDefineProp = Object.entries(exportProps).map(([key, val]) => {
+      const k = key.trim()
+      return `Object.defineProperty(exports, '${k}', { get() { return ${val} }, enumerable: true, configurable: true }); exports['__get${k}'] = () => ${val};`
+    })
+
+    // At the bottom of the file we overwrite `module.exports` again to be an
+    // `commonJS` compatible Object literal
+    const exportDirect = Object.entries(exportProps).map(
       ([key, val]) => `${key}: ${val}`
     )
-    adaptedLines.push('const __getModuleExports = () => ({ __esModule: true,')
-    for (const exp of exportPropsStr) {
-      adaptedLines.push(`${exp},`)
+
+    // -----------------
+    // module.exports getters
+    // -----------------
+    for (const exp of exportDefineProp) {
+      adaptedLines.push(`${exp};`)
     }
-    adaptedLines.push('})')
 
     // -----------------
     // User code
@@ -51,6 +60,15 @@ export function rewriteExports(code: string): string {
     for (let j = endIdx + 1; j < lines.length; j++) {
       adaptedLines.push(lines[j])
     }
+
+    // -----------------
+    // module.exports literal
+    // -----------------
+    adaptedLines.push('module.exports = {')
+    for (const exp of exportDirect) {
+      adaptedLines.push(`${exp},`)
+    }
+    adaptedLines.push('}')
   } else {
     // no exports, thus we leave the code up to here unchanged
     adaptedLines = lines
@@ -58,12 +76,7 @@ export function rewriteExports(code: string): string {
 
   const adaptedTop = adaptedLines.join('\n')
 
-  // We have to resolve module.exports at the bottom to make sure all props resolved in
-  // it have been defined at this point
-  let adaptedCode = (replacingExports
-    ? `${adaptedTop};module.exports = __getModuleExports()`
-    : adaptedTop
-  )
+  let adaptedCode = adaptedTop
     // TODO: would be more efficient to perform the replace on the particular line
     .replace(/var __toModule/, 'var __orig_toModule')
 
