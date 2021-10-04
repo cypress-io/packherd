@@ -10,7 +10,7 @@
   "scripts": {
     "prepublish": "yarn build",
     "build": "tsc -p ./tsconfig.json",
-    "test-only": "(cd tests/fixtures/minimal && yarn) && tape ./dist/tests/*.js && node ./dist/tests/circular/test.js",
+    "test-only": "(cd tests/fixtures/minimal && yarn) && (cp tests/fixtures/default-imports/* dist/tests/fixtures/default-imports/) && tape ./dist/tests/*.js && node ./dist/tests/circular/test.js",
     "test": "yarn build && yarn test-only",
     "lint": "prettier -c ./src/",
     "lint:fix": "prettier --format ./src",
