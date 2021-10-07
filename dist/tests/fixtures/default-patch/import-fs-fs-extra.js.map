@@ -1,0 +1,1 @@
+{"version":3,"file":"import-fs-fs-extra.js","sourceRoot":"","sources":["../../../../tests/fixtures/default-patch/import-fs-fs-extra.ts"],"names":[],"mappings":";;;;;;AAAA,4CAAmB;AACnB,wDAA0B;AAE1B,SAAgB,aAAa;IAC3B,OAAO;QACL,aAAa;QACb,cAAc,EAAE,OAAO,kBAAG,CAAC,WAAW;QACtC,aAAa;QACb,aAAa,EAAE,OAAO,YAAE,CAAC,WAAW;KACrC,CAAA;AACH,CAAC;AAPD,sCAOC"}
