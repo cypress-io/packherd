@@ -24,8 +24,7 @@ jobs:
     - name: yarn install, build, lint and test
       run: |
         yarn install
-        yarn run build
         yarn run lint
-        yarn run test-only
+        yarn run test
       env:
         CI: true
