@@ -80,22 +80,27 @@ export function rewriteExports(code: string): string {
     .replace(/var __toModule/, 'var __orig_toModule')
 
   return `${adaptedCode}
-function __toModule(mdl) {
+function __toModule(mdl, path) {
   const target = mdl ?? {}
-  if (!Object.hasOwnProperty.call(mdl, 'default')) {
-    __defProp(
-      target,
-      'default',
-      mdl && mdl.__esModule && Object.hasOwnProperty.call(mdl, 'default')
-        ? { get: () => target.default,
-            set: (val) => target.default = val,
-            enumerable: true }
-        : { value: mdl, 
-            writable: true,
-            enumerable: true }
-    )
+  // When a module like 'fs' was required first and then patched, i.e. via
+  // fs-extra then 'fs.default' still points to the unpatched version.
+  // However we added 'fs.default'.
+  // We prevent that 'fs-extra.default' picks up the unpatched 'fs.default' by ignoring
+  // 'default' assignments that we made.
+  const hasTrueDefault =
+    Object.hasOwnProperty.call(mdl, 'default') &&
+    !mdl.__defaultViaToModule
+
+  const isEsmodule = !!(mdl && mdl.__esModule)
+  if (!hasTrueDefault) {
+    mdl.__defaultViaToModule = true
+    __defProp(target, 'default', {
+      value: mdl,
+      writable: true,
+      enumerable: true,
+    })
   }
-  if (!('__esModule' in target)) {
+  if (!isEsmodule) {
     __markAsModule(target)
   }
   return target
