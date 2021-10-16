@@ -20,6 +20,17 @@ const logTrace = debug('packherd:trace')
 const logError = debug('packherd:error')
 
 export * from './loader'
+
+/**
+ * Configures how packerd require works.
+ *
+ * @property requireStatsFile: specifies where to write benchmarking stats if diagnose is active
+ * @property transpileOpts: configures if/how TypeScript files are transpiled
+ * @property sourceMapLookup: if provided it will be used to find sourcemaps by module URI
+ * @property moduleNeedsReload: allows to override how packherd determines if a
+ * module needs to be reloaded even if found in a cache
+ * @category Loader
+ */
 export type PackherdRequireOpts = ModuleLoaderOpts & {
   requireStatsFile?: string
   transpileOpts?: Partial<PackherdTranspileOpts>
@@ -31,6 +42,33 @@ const DEFAULT_TRANSPILE_OPTS = {
   supportTS: false,
 }
 
+/**
+ * Patches Node.js require chain in order to load modules from different sources
+ * and/or transpile TypeScript modules on the fly.
+ *
+ * Hooks into `Module_.load` if either {@link ModuleLoaderOpts} `moduleExports`
+ * or `moduleDefinitions` or both are provided.
+ * It will then try to load modules from either of those two before falling
+ * back to the default Node.js behavior and loading them from the file system.
+ *
+ * Optionally hooks into `Module._extension` in order to transpile TypeScript files as
+ * they are required/imported.
+ *
+ * @returns a variety of functions which allow to communicate with the loader:
+ *
+ *   - resolve: function to resolve a module from it's URI
+ *   - shouldBypassCache: returns `true` if a cache, i.e. exports embedded in the
+ *     snapshot cannot by used
+ *   - registerModuleLoad: allows registering modules being loaded even if that
+ *     occurs from inside a snapshot
+ *  - registerModuleLoad: needs to be called to track loaded modules which is
+ *    necessary to determine if cache should be bypassed or not
+ *
+ * These are used by [v8-snapshot](https://github.com/thlorenz/v8-snapshot)
+ * from the `require` embedded in its snapshot, see [custom-require](https://github.com/thlorenz/v8-snapshot/blob/master/src/blueprint/custom-require.js).
+ *
+ * @category Loader
+ */
 export function packherdRequire(
   projectBaseDir: string,
   opts: PackherdRequireOpts
@@ -143,16 +181,6 @@ export function packherdRequire(
           )
           break
         }
-        case 'path': {
-          logDebug(
-            'Resolved "%s" via %s (%s | %s)',
-            moduleUri,
-            resolved,
-            moduleRelativePath,
-            fullPath
-          )
-          break
-        }
       }
 
       switch (origin) {
@@ -167,8 +195,7 @@ export function packherdRequire(
           break
         }
         case 'packherd:export':
-        case 'packherd:definition':
-        case 'packherd:loading': {
+        case 'packherd:definition': {
           logTrace('Loaded "%s" via (%s | %s)', moduleUri, origin, resolved)
           break
         }
