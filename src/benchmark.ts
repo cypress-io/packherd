@@ -19,13 +19,31 @@ export type PersistedLoadInfos = {
   moduleLoads: [string, LoadInfo][]
 }
 
+/**
+ * Exposes an API to interact with the packherd benchmarking tool
+ * created via {@link setupBenchmark}.
+ *
+ * @category Benchmark
+ */
 export type Benchmark = {
+  /**
+   * Similar to `console.time` indicates the start of a module load action with given key.
+   */
   time(key: string): void
+  /**
+   * Similar to `console.timeEnd` indicates the completion of a module load action with given key.
+   *
+   * @param origin indicates how the module was loaded
+   * @param stack the stack of modules, parent to child which led to loading this module
+   */
   timeEnd(
     key: string,
     origin: ModuleLoadResult['origin'],
     stack: string[]
   ): void
+  /**
+   * Writes the collected benchmarks to the provided file, see {@link setupBenchmark}.
+   */
   write(): void
 }
 
@@ -122,6 +140,14 @@ class ActiveBenchmark {
  * Depending on the provided outputPath being defined or not, it sets up
  * an inactive benchmark which does nothing or an active one which
  * collects and writes out data.
+ *
+ * Tracks loaded modules, either via exports, definitions or via Node.js
+ * and the time it took to load them.
+ *
+ * @param projectBaseDir root of project
+ * @param outputPath optional benchmark output
+ *
+ * @category Benchmark
  */
 export function setupBenchmark(projectBaseDir: string, outputPath?: string) {
   if (outputPath == null) return new InactiveBenchmark()
