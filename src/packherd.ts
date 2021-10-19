@@ -10,7 +10,7 @@ export * from './types'
 export { getSourceMap, getSourceMapAndContent } from './sourcemap-support'
 
 /**
- * Options which controls how the packherd  bundle is generated
+ * Options which control how the packherd bundle is generated
  *
  * @property entryFile: path to index file of app to bundle
  *

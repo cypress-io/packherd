@@ -86,6 +86,7 @@ export function packherdRequire(
     initTranspileCache == null
       ? new DefaultTranspileCache()
       : initTranspileCache(projectBaseDir, {
+          // even though we pass `cacheDir` here other end may store the cache wherever it wants
           cacheDir: '/tmp/packherd-cache',
         }) ?? new DefaultTranspileCache()
 

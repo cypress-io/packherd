@@ -595,7 +595,7 @@ export class PackherdModuleLoader {
       mod.loaded = true
       this.definitionHits.add(mod.id)
       return { mod, origin }
-    } catch (err) {
+    } catch (err: any) {
       logWarn(err.message)
       logSilly(err)
       return { mod: undefined, origin }
