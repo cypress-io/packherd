@@ -25,12 +25,35 @@ export type GetModuleKeyOpts = {
   isResolve?: boolean
 }
 
+/**
+ * Function to override how a module key/id is derived from a moduleUri.
+ * In order to load the module from either the `ModuleLoaderOpts['moduleExports']` or
+ * `ModuleLoaderOpts['moduleDefinitions']` the returned key needs to match how modules are keyed there.
+ *
+ * @param moduleUri uri specified via a `require` or `import`
+ * @param baseDir the base dir of the project
+ * @param opts
+ *
+ * @category Loader
+ */
 export type GetModuleKey = (opts: {
   moduleUri: string
   baseDir: string
   opts?: GetModuleKeyOpts
 }) => { moduleKey: string | undefined; moduleRelativePath: string | undefined }
 
+/**
+ * Configures the {@link PackherdModuleLoader}.
+ *
+ * @property diagnostics: if set loading diagnostics are collected and logged
+ * @property moduleExports: map holding fully initialized and exported modules
+ * @property moduleDefinitions: map holding functions that when invoke initialize a module and return its exports
+ * @property getModuleKey: overrides how a module's key is resolved from its uri
+ * @property moduleNeedsReload?: determines if a module needs to be reloaded even if it was found in a cache or
+ * `moduleExports`
+ *
+ * @category Loader
+ */
 export type ModuleLoaderOpts = {
   diagnostics?: boolean
   moduleExports?: Record<string, Module>
@@ -39,11 +62,17 @@ export type ModuleLoaderOpts = {
   moduleNeedsReload?: ModuleNeedsReload
 }
 
+// Very simple implementation of obtaining a module key by just prefixing the relative path with `./`
 const defaultGetModuleKey: GetModuleKey = ({ moduleUri, baseDir }) => {
   const moduleRelativePath = path.relative(baseDir, moduleUri)
   return { moduleKey: `./${moduleRelativePath}`, moduleRelativePath }
 }
 
+/**
+ * This keeps track of which modules are being loaded currently and is used to handle circular imports properly.
+ *
+ * @category Loader
+ */
 class LoadingModules {
   private readonly currentlyLoading: Map<string, Module> = new Map()
   start(id: string, mod: Module) {
@@ -74,18 +103,50 @@ function defaultModuleNeedsReload(
   return loadedModules.has(moduleId) && moduleCache == null
 }
 
+/**
+ * Tracks loaded modules and is used to determine if a module needs to be reloaded or if it could be retrieved from a
+ * cache.
+ * Basically we register all loaded modules here and when loading a module we compare our record with the
+ * {@see * _moduleCache}. If we have it, but the `_moduleCache` doesn't this means that it was deleted from the latter.
+ * In that case we need to reload it fresh instead of pulling from any cache, including our {@link _moduleExports} in
+ * order to replicate the behaviour that Node.js has by default.
+ *
+ * @category Loader
+ */
 class CacheTracker {
   private readonly _loadedModules: Set<string> = new Set()
+
+  /**
+   * Creates {@link CacheTracker} instance.
+   *
+   * @param _moduleCache the Node.js module cache, aka `Module._cache` and `require.cache` which are the same object
+   * @param _moduleExports the module exports provided to packherd, i.e. could be pre-initialized modules snapshotted
+   * into the app. Any loaded module not yet found inside this map is added there. However it is **NOT** part of the
+   * decision if a module should be reloaded or not.
+   * @param _moduleNeedsReload the function to determine if a module needs to be reloaded even if it was found inside
+   * the {@link _moduleCache} or {@link _moduleExports}.
+   */
   constructor(
     private readonly _moduleCache: Record<string, NodeModule>,
     private readonly _moduleExports: Record<string, Module>,
     private readonly _moduleNeedsReload: ModuleNeedsReload
   ) {}
 
+  /**
+   * Registers a module load for the given id.
+   */
   addLoadedById(id: string) {
     this._loadedModules.add(id)
   }
 
+  /**
+   * Registers a module as loaded providing added information about how it was loaded.
+   *
+   * @param mod the module that was loaded
+   * @param resolved the strategy as to how the module was resolved
+   * @param origin the origin of the module, i.e. did it come from a cache, _moduleExports or similar
+   * @param moduleKey the derived key of the module if it was obtained
+   */
   addLoaded(
     mod: NodeModule,
     resolved: string,
@@ -96,10 +157,15 @@ class CacheTracker {
       mod.id != null,
       `Should have module id when loading by ${resolved} via ${origin} succeeded`
     )
+    // Add the module to the Node.js module cache
     this._moduleCache[mod.id] = mod
+
+    // Add it to the `_moduleExports` as well in order to shortcut loading it from inside the snapshot
     if (moduleKey != null) {
       this._moduleExports[moduleKey] = mod
     }
+
+    // Register the module as loaded
     this._loadedModules.add(mod.id)
 
     if (logTrace.enabled) {
@@ -115,6 +181,10 @@ class CacheTracker {
     }
   }
 
+  /**
+   * Determines if a module needs to be loaded fresh or if it can either be loaded from the {@link _moduleCache} or
+   * {@link _moduleExports}.
+   */
   moduleNeedsReload(mod: NodeModule) {
     // We update our exports cache when loading a module, thus if it came from there
     // and doesn't have one yet that means that it was never loaded before
@@ -735,6 +805,9 @@ export class PackherdModuleLoader {
   }
 }
 
+/**
+ * Mimics a Node.js` MODULE_NOT_FOUND` error in order to not break apps that depend on the `err.code` exactly.
+ */
 function moduleNotFoundError(msg: string, moduleUri: string) {
   // https://github.com/nodejs/node/blob/da0ede1ad55a502a25b4139f58aab3fb1ee3bf3f/lib/internal/modules/cjs/loader.js#L353-L359
   const err = new Error(msg)
