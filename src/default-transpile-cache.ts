@@ -1,5 +1,8 @@
 import type { TranspileCache } from './types'
 
+/**
+ * In memory transpile cache that is used if none was provided to `packerd:require`.
+ */
 export class DefaultTranspileCache implements TranspileCache {
   private readonly _cache: Map<string, string> = new Map()
 
