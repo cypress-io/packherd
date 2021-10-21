@@ -9,6 +9,20 @@ export { packherdRequire, PackherdRequireOpts, GetModuleKey } from './require'
 export * from './types'
 export { getSourceMap, getSourceMapAndContent } from './sourcemap-support'
 
+/**
+ * Options which control how the packherd bundle is generated
+ *
+ * @property entryFile: path to index file of app to bundle
+ *
+ * @property nodeModulesOnly: if `true` only `node_modules` are included in the
+ * bundle
+ *
+ * @property pathsMapper: if provided that paths under which modules are
+ * included in the bundle will be mapped
+ *
+ * @property createBundle: allows overriding the function used to create the
+ * bundle
+ */
 export type PackherdOpts = {
   entryFile: string
   nodeModulesOnly?: boolean
@@ -16,6 +30,15 @@ export type PackherdOpts = {
   createBundle?: CreateBundle
 }
 
+/**
+ * packherd function which is a thin layer around [esbuild](https://github.com/evanw/esbuild)
+ *
+ * The return value includes the below:
+ *  - `bundle` Buffer
+ *  - optionally a Buffer containing the `sourceMap` content
+ *  - `meta` containing information about the bundled assets
+ *  - `warnings` emitted by esbuild
+ */
 export async function packherd(opts: PackherdOpts) {
   const createBundle = opts.createBundle || defaultCreateBundle
   const entryGenerator = new EntryGenerator(

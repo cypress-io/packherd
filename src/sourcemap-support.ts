@@ -64,6 +64,8 @@ const headerLength = noHeader.test(process.version) ? 0 : 62
  * @param bundleUri the path of the generated bundle
  * @param cache when provided will be used to look for sourcemaps from transpiled modules
  * @param sourceMapLookup when provided will be queried to lookup sourcemaps
+ *
+ * @category Sourcemap
  */
 export function getSourceMap(
   projectBaseDir: string,
@@ -88,6 +90,8 @@ export function getSourceMap(
  * @param fileUri the path for the original file we want to extract the source content for
  * @param cache when provided will be used to look for sourcemaps from transpiled modules
  * @param sourceMapLookup when provided will be queried to lookup sourcemaps
+ *
+ * @category Sourcemap
  */
 export function getSourceMapAndContent(
   projectBaseDir: string,
